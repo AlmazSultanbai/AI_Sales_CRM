@@ -25,3 +25,23 @@ export type ProductPayload = {
   unit: UnitType;
   stock: number;
 };
+
+export type StoreDebt = {
+  id: string;
+  shop_name: string;
+  owner_name: string | null;
+  phone: string | null;
+  debt_amount: number;
+  note: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StoreDebtPayload = {
+  shop_name: string;
+  owner_name?: string | null;
+  phone?: string | null;
+  debt_amount: number;
+  note?: string | null;
+};

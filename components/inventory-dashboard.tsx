@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { allowedUnits, categoryLabels, unitLabels } from "@/lib/product-utils";
 import {
-  allowedUnits,
-  categoryLabels,
-  unitLabels,
-} from "@/lib/product-utils";
-import { Product, ProductCategory, ProductPayload, UnitType } from "@/lib/types";
+  Product,
+  ProductCategory,
+  ProductPayload,
+  StoreDebt,
+  StoreDebtPayload,
+  UnitType,
+} from "@/lib/types";
 
 const defaultForm: ProductPayload = {
   category: "material",
@@ -18,21 +21,33 @@ const defaultForm: ProductPayload = {
   stock: 0,
 };
 
+const defaultDebtForm: StoreDebtPayload = {
+  shop_name: "",
+  owner_name: "",
+  phone: "",
+  debt_amount: 0,
+  note: "",
+};
+
 type SaveState = "idle" | "saving";
 
 export function InventoryDashboard() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [stores, setStores] = useState<StoreDebt[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"success" | "error">("success");
   const [filter, setFilter] = useState<"all" | ProductCategory>("all");
   const [search, setSearch] = useState("");
   const [form, setForm] = useState<ProductPayload>(defaultForm);
+  const [debtForm, setDebtForm] = useState<StoreDebtPayload>(defaultDebtForm);
   const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [debtSaveState, setDebtSaveState] = useState<SaveState>("idle");
   const [rowState, setRowState] = useState<Record<string, SaveState>>({});
+  const [debtRowState, setDebtRowState] = useState<Record<string, SaveState>>({});
 
   useEffect(() => {
-    void loadProducts();
+    void Promise.all([loadProducts(), loadStores()]);
   }, []);
 
   const filteredProducts = useMemo(() => {
@@ -47,27 +62,27 @@ export function InventoryDashboard() {
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
-      const matchesSearch = haystack.includes(search.trim().toLowerCase());
-
-      return matchesCategory && matchesSearch;
+      return matchesCategory && haystack.includes(search.trim().toLowerCase());
     });
   }, [filter, products, search]);
 
   const stats = useMemo(() => {
     const totalStock = products.reduce((sum, item) => sum + Number(item.stock), 0);
-    const totalValue = products.reduce((sum, item) => sum + Number(item.stock) * Number(item.price), 0);
+    const debtSum = stores
+      .filter((store) => store.is_active)
+      .reduce((sum, store) => sum + Number(store.debt_amount), 0);
 
     return {
       total: products.length,
       materials: products.filter((item) => item.category === "material").length,
       accessories: products.filter((item) => item.category !== "material").length,
       totalStock,
-      totalValue,
+      storesWithDebt: stores.filter((store) => store.is_active).length,
+      debtSum,
     };
-  }, [products]);
+  }, [products, stores]);
 
   async function loadProducts() {
-    setLoading(true);
     const response = await fetch("/api/products");
     const data = (await response.json()) as Product[] | { error: string };
 
@@ -79,6 +94,18 @@ export function InventoryDashboard() {
 
     setProducts(data);
     setLoading(false);
+  }
+
+  async function loadStores() {
+    const response = await fetch("/api/stores");
+    const data = (await response.json()) as StoreDebt[] | { error: string };
+
+    if (!response.ok || !Array.isArray(data)) {
+      showMessage("Не удалось загрузить долги магазинов", "error");
+      return;
+    }
+
+    setStores(data);
   }
 
   function showMessage(text: string, type: "success" | "error") {
@@ -125,7 +152,28 @@ export function InventoryDashboard() {
     setSaveState("idle");
   }
 
-  async function updateRow(id: string, patch: Partial<Product>) {
+  async function submitDebtForm() {
+    setDebtSaveState("saving");
+    const response = await fetch("/api/stores", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(debtForm),
+    });
+
+    const data = (await response.json()) as StoreDebt | { error: string };
+    if (!response.ok || "error" in data) {
+      showMessage("error" in data ? data.error : "Не удалось добавить долг", "error");
+      setDebtSaveState("idle");
+      return;
+    }
+
+    setStores((current) => [data, ...current]);
+    setDebtForm(defaultDebtForm);
+    showMessage(`Магазин "${data.shop_name}" добавлен в долги`, "success");
+    setDebtSaveState("idle");
+  }
+
+  async function updateProductRow(id: string, patch: Partial<Product>) {
     const target = products.find((item) => item.id === id);
     if (!target) return;
 
@@ -156,14 +204,46 @@ export function InventoryDashboard() {
     setRowState((current) => ({ ...current, [id]: "idle" }));
   }
 
+  async function updateStoreRow(id: string, patch: Partial<StoreDebt>) {
+    const target = stores.find((item) => item.id === id);
+    if (!target) return;
+
+    setDebtRowState((current) => ({ ...current, [id]: "saving" }));
+
+    const response = await fetch(`/api/stores/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        shop_name: patch.shop_name ?? target.shop_name,
+        owner_name: patch.owner_name ?? target.owner_name,
+        phone: patch.phone ?? target.phone,
+        debt_amount: patch.debt_amount ?? target.debt_amount,
+        note: patch.note ?? target.note,
+        is_active: patch.is_active ?? target.is_active,
+      }),
+    });
+
+    const data = (await response.json()) as StoreDebt | { error: string };
+    if (!response.ok || "error" in data) {
+      showMessage("error" in data ? data.error : "Не удалось обновить долг", "error");
+      setDebtRowState((current) => ({ ...current, [id]: "idle" }));
+      return;
+    }
+
+    setStores((current) => current.map((item) => (item.id === id ? data : item)));
+    showMessage(`Долг магазина "${data.shop_name}" обновлен`, "success");
+    setDebtRowState((current) => ({ ...current, [id]: "idle" }));
+  }
+
   return (
     <main className="page-shell">
       <section className="hero">
         <span className="eyebrow">Supabase Warehouse</span>
         <h1>Умный склад для материалов и комплектующих</h1>
         <p>
-          Здесь клиент может сам добавлять новые коллекции, модели, цвета, цены,
-          единицы измерения и остатки. Вся логика склада уже работает поверх Supabase.
+          Теперь в системе есть больше воздуха между блоками и отдельный раздел
+          по магазинам с долгами, чтобы вы видели не только остатки, но и
+          задолженность клиентов.
         </p>
       </section>
 
@@ -183,6 +263,10 @@ export function InventoryDashboard() {
         <div className="stat-card">
           <div className="stat-label">Общий остаток</div>
           <div className="stat-value">{stats.totalStock}</div>
+        </div>
+        <div className="stat-card danger-card">
+          <div className="stat-label">Долги магазинов</div>
+          <div className="stat-value danger-text">{stats.debtSum} c</div>
         </div>
       </section>
 
@@ -254,7 +338,6 @@ export function InventoryDashboard() {
                   }
                 />
               </div>
-
               <div className="field">
                 <label>Единица</label>
                 <select
@@ -294,14 +377,18 @@ export function InventoryDashboard() {
               </button>
               <button
                 className="secondary-btn"
-                onClick={() => setForm({ ...defaultForm, category: form.category, unit: allowedUnits(form.category)[0] })}
+                onClick={() =>
+                  setForm({
+                    ...defaultForm,
+                    category: form.category,
+                    unit: allowedUnits(form.category)[0],
+                  })
+                }
                 disabled={saveState === "saving"}
               >
                 Очистить
               </button>
             </div>
-
-            <div className={`message ${messageType}`}>{message}</div>
           </div>
         </aside>
 
@@ -309,9 +396,8 @@ export function InventoryDashboard() {
           <div className="toolbar">
             <div>
               <h2>Позиции склада</h2>
-              <p>Меняйте цену, единицу измерения, остаток и статус прямо в таблице.</p>
+              <p>Ячейки стали шире и отделены друг от друга, чтобы таблица читалась легче.</p>
             </div>
-
             <div className="toolbar-controls">
               <input
                 className="search"
@@ -337,6 +423,8 @@ export function InventoryDashboard() {
             ))}
           </div>
 
+          <div className={`message ${messageType}`}>{message}</div>
+
           {loading ? (
             <div className="empty-state">Загружаю товары...</div>
           ) : filteredProducts.length === 0 ? (
@@ -346,22 +434,21 @@ export function InventoryDashboard() {
               <table className="inventory-table">
                 <thead>
                   <tr>
-                    <th>Название</th>
+                    <th className="spacious-cell">Название</th>
                     <th>Категория</th>
                     <th>Цена</th>
                     <th>Единица</th>
                     <th>Остаток</th>
                     <th>Статус</th>
-                    <th>Действия</th>
+                    <th className="action-cell">Действия</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredProducts.map((product) => {
                     const saving = rowState[product.id] === "saving";
-
                     return (
                       <tr key={product.id}>
-                        <td>
+                        <td className="spacious-cell">
                           <div className="table-title">{product.title}</div>
                           <div className="subtle">
                             {product.category === "material"
@@ -438,22 +525,203 @@ export function InventoryDashboard() {
                             {product.is_active ? "Активный" : "Скрыт"}
                           </button>
                         </td>
-                        <td>
-                          <div className="button-row">
-                            <button
-                              className="primary-btn"
-                              onClick={() => void updateRow(product.id, product)}
-                              disabled={saving}
-                            >
-                              {saving ? "..." : "Сохранить"}
-                            </button>
-                          </div>
+                        <td className="action-cell">
+                          <button
+                            className="primary-btn"
+                            onClick={() => void updateProductRow(product.id, product)}
+                            disabled={saving}
+                          >
+                            {saving ? "..." : "Сохранить"}
+                          </button>
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+        </section>
+      </section>
+
+      <section className="debts-layout">
+        <aside className="panel">
+          <h2>Магазины с долгами</h2>
+          <p>Добавляйте магазины, сумму долга, контакт и заметку по оплате.</p>
+
+          <div className="form-grid">
+            <div className="field">
+              <label>Название магазина</label>
+              <input
+                value={debtForm.shop_name}
+                onChange={(event) =>
+                  setDebtForm((current) => ({ ...current, shop_name: event.target.value }))
+                }
+                placeholder="Например: Магазин Бишкек"
+              />
+            </div>
+            <div className="field">
+              <label>Ответственный</label>
+              <input
+                value={debtForm.owner_name ?? ""}
+                onChange={(event) =>
+                  setDebtForm((current) => ({ ...current, owner_name: event.target.value }))
+                }
+                placeholder="Имя клиента"
+              />
+            </div>
+            <div className="field">
+              <label>Телефон</label>
+              <input
+                value={debtForm.phone ?? ""}
+                onChange={(event) =>
+                  setDebtForm((current) => ({ ...current, phone: event.target.value }))
+                }
+                placeholder="+996 ..."
+              />
+            </div>
+            <div className="field">
+              <label>Сумма долга</label>
+              <input
+                type="number"
+                min="0"
+                value={debtForm.debt_amount}
+                onChange={(event) =>
+                  setDebtForm((current) => ({
+                    ...current,
+                    debt_amount: Number(event.target.value),
+                  }))
+                }
+              />
+            </div>
+            <div className="field">
+              <label>Заметка</label>
+              <input
+                value={debtForm.note ?? ""}
+                onChange={(event) =>
+                  setDebtForm((current) => ({ ...current, note: event.target.value }))
+                }
+                placeholder="Когда обещали закрыть долг"
+              />
+            </div>
+
+            <div className="button-row">
+              <button
+                className="primary-btn"
+                onClick={() => void submitDebtForm()}
+                disabled={debtSaveState === "saving"}
+              >
+                {debtSaveState === "saving" ? "Сохраняю..." : "Добавить долг"}
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <section className="panel">
+          <div className="toolbar">
+            <div>
+              <h2>Список должников</h2>
+              <p>
+                Активных магазинов с долгами: <strong>{stats.storesWithDebt}</strong>
+              </p>
+            </div>
+            <span className="pill-note">Общий долг: {stats.debtSum} c</span>
+          </div>
+
+          {stores.length === 0 ? (
+            <div className="empty-state">Пока нет магазинов с долгами.</div>
+          ) : (
+            <div className="form-grid">
+              {stores.map((store) => {
+                const saving = debtRowState[store.id] === "saving";
+                return (
+                  <div key={store.id} className="debt-card">
+                    <div className="debt-header">
+                      <div>
+                        <div className="debt-title">{store.shop_name}</div>
+                        <div className="debt-meta">
+                          {store.owner_name || "Без ответственного"} · {store.phone || "Телефон не указан"}
+                        </div>
+                      </div>
+                      <span className={`status-badge ${store.is_active ? "" : "inactive"}`}>
+                        {store.is_active ? "Есть долг" : "Закрыт"}
+                      </span>
+                    </div>
+
+                    <div className="field-row">
+                      <div className="field">
+                        <label>Сумма долга</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={store.debt_amount}
+                          onChange={(event) => {
+                            const value = Number(event.target.value);
+                            setStores((current) =>
+                              current.map((item) =>
+                                item.id === store.id ? { ...item, debt_amount: value } : item
+                              )
+                            );
+                          }}
+                        />
+                      </div>
+                      <div className="field">
+                        <label>Телефон</label>
+                        <input
+                          value={store.phone ?? ""}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setStores((current) =>
+                              current.map((item) =>
+                                item.id === store.id ? { ...item, phone: value } : item
+                              )
+                            );
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="field">
+                      <label>Заметка</label>
+                      <input
+                        value={store.note ?? ""}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setStores((current) =>
+                            current.map((item) =>
+                              item.id === store.id ? { ...item, note: value } : item
+                            )
+                          );
+                        }}
+                      />
+                    </div>
+
+                    <div className="button-row">
+                      <button
+                        className="secondary-btn"
+                        onClick={() => {
+                          setStores((current) =>
+                            current.map((item) =>
+                              item.id === store.id
+                                ? { ...item, is_active: !item.is_active }
+                                : item
+                            )
+                          );
+                        }}
+                      >
+                        {store.is_active ? "Отметить как закрыт" : "Вернуть в долги"}
+                      </button>
+                      <button
+                        className="primary-btn"
+                        onClick={() => void updateStoreRow(store.id, store)}
+                        disabled={saving}
+                      >
+                        {saving ? "..." : "Сохранить"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>

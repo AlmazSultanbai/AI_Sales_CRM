@@ -74,8 +74,9 @@ select {
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 22px;
 }
 
 .stat-card,
@@ -88,7 +89,7 @@ select {
 }
 
 .stat-card {
-  padding: 18px 20px;
+  padding: 22px 24px;
 }
 
 .stat-label {
@@ -104,13 +105,13 @@ select {
 
 .workspace {
   display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: 380px minmax(0, 1fr);
+  gap: 24px;
   align-items: start;
 }
 
 .panel {
-  padding: 22px;
+  padding: 28px;
 }
 
 .panel h2 {
@@ -211,8 +212,8 @@ select {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 18px;
+  gap: 18px;
+  margin-bottom: 20px;
 }
 
 .toolbar-controls {
@@ -254,26 +255,42 @@ select {
 
 .table-wrap {
   overflow: auto;
+  margin-top: 18px;
+  padding-top: 8px;
 }
 
 .inventory-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0 14px;
   min-width: 900px;
 }
 
 .inventory-table th,
 .inventory-table td {
-  padding: 14px 10px;
-  border-bottom: 1px solid rgba(216, 203, 182, 0.7);
+  padding: 18px 12px;
+  border-bottom: none;
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .inventory-table th {
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
+  background: transparent;
+  padding-bottom: 8px;
+}
+
+.inventory-table td:first-child {
+  border-top-left-radius: 18px;
+  border-bottom-left-radius: 18px;
+}
+
+.inventory-table td:last-child {
+  border-top-right-radius: 18px;
+  border-bottom-right-radius: 18px;
 }
 
 .table-title {
@@ -288,12 +305,79 @@ select {
 
 .inline-input,
 .inline-select {
-  width: 110px;
-  min-height: 40px;
+  width: 124px;
+  min-height: 44px;
   border-radius: 12px;
   border: 1px solid var(--line);
-  padding: 0 10px;
+  padding: 0 12px;
   background: white;
+}
+
+.spacious-cell {
+  min-width: 180px;
+}
+
+.action-cell {
+  min-width: 156px;
+}
+
+.pill-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(20, 83, 45, 0.08);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.debts-layout {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.debt-card {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(216, 203, 182, 0.8);
+}
+
+.debt-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: start;
+}
+
+.debt-title {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.debt-meta,
+.debt-note {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.debt-amount {
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.danger-card {
+  background: linear-gradient(180deg, rgba(159, 18, 57, 0.08), rgba(255, 255, 255, 0.75));
+}
+
+.danger-text {
+  color: var(--danger);
 }
 
 .status-badge {
@@ -320,6 +404,10 @@ select {
 
 @media (max-width: 1080px) {
   .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .debts-layout {
     grid-template-columns: 1fr;
   }
 

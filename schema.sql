@@ -102,3 +102,45 @@ values
   ('fixer', 'Фиксатор коричневый', null, null, 'коричневый', 800, 'piece', 0),
   ('fixer', 'Фиксатор серый', null, null, 'серый', 800, 'piece', 0)
 on conflict do nothing;
+
+create table if not exists shops (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  contact_name text,
+  phone text,
+  debt numeric(12, 2) not null default 0,
+  notes text,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create trigger shops_set_updated_at
+before update on shops
+for each row
+execute function set_updated_at();
+
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'movement_type') then
+    create type movement_type as enum ('incoming', 'outgoing', 'return');
+  end if;
+end $$;
+
+create table if not exists stock_movements (
+  id uuid primary key default gen_random_uuid(),
+  type movement_type not null,
+  product_id uuid not null references products(id) on delete restrict,
+  quantity numeric(12, 2) not null,
+  shop_id uuid references shops(id) on delete set null,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists payments (
+  id uuid primary key default gen_random_uuid(),
+  shop_id uuid not null references shops(id) on delete restrict,
+  amount numeric(12, 2) not null,
+  notes text,
+  created_at timestamptz not null default now()
+);

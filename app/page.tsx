@@ -1,5 +1,5 @@
-import { InventoryDashboard } from "@/components/inventory-dashboard";
+import { redirect } from "next/navigation";
 
-export default function HomePage() {
-  return <InventoryDashboard />;
+export default function RootPage() {
+  redirect("/catalog");
 }

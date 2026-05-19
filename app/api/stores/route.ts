@@ -1,51 +1,81 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
-import { StoreDebtPayload } from "@/lib/types";
+import { supabaseAdmin } from "@/lib/supabase/admin-client";
+import { getCompanyIdFromRequest, getRoleFromRequest } from "@/lib/auth/request-context";
+import { can } from "@/lib/auth/rbac";
+import { createStoreSchema, storeFilterSchema, storeSortSchema } from "@/features/stores/lib/schemas";
 
-function normalizeText(value?: string | null) {
-  const trimmed = value?.trim() ?? "";
-  return trimmed.length > 0 ? trimmed : null;
-}
+export async function GET(request: NextRequest) {
+  const companyId = getCompanyIdFromRequest(request);
+  const search = request.nextUrl.searchParams.get("search")?.trim() ?? "";
+  const filter = storeFilterSchema.parse(request.nextUrl.searchParams.get("filter") ?? "all");
+  const sort = storeSortSchema.parse(request.nextUrl.searchParams.get("sort") ?? "name");
 
-export async function GET() {
-  const { data, error } = await supabaseAdmin
-    .from("store_debts")
-    .select("*")
-    .order("is_active", { ascending: false })
-    .order("debt_amount", { ascending: false });
+  let query = supabaseAdmin
+    .from("stores")
+    .select("id,name,contact_person,phone,address,notes,debt_balance,is_active,total_purchases_sum,total_paid_sum,current_debt_sum,last_activity_at,created_at,updated_at")
+    .eq("company_id", companyId);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (search) {
+    query = query.or(`name.ilike.%${search}%,contact_person.ilike.%${search}%`);
   }
 
-  return NextResponse.json(data);
+  if (filter === "with_debt") {
+    query = query.gt("current_debt_sum", 0).eq("is_active", true);
+  }
+
+  if (filter === "without_debt") {
+    query = query.eq("current_debt_sum", 0).eq("is_active", true);
+  }
+
+  if (filter === "inactive") {
+    query = query.eq("is_active", false);
+  }
+
+  if (filter === "all") {
+    query = query.eq("is_active", true);
+  }
+
+  if (sort === "name") {
+    query = query.order("name", { ascending: true });
+  }
+
+  if (sort === "debt") {
+    query = query.order("current_debt_sum", { ascending: false });
+  }
+
+  if (sort === "activity") {
+    query = query.order("last_activity_at", { ascending: false, nullsFirst: false });
+  }
+
+  const { data, error } = await query;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json(data ?? []);
 }
 
 export async function POST(request: NextRequest) {
-  const body = (await request.json()) as Partial<StoreDebtPayload>;
-
-  if (!normalizeText(body.shop_name)) {
-    return NextResponse.json({ error: "Название магазина обязательно" }, { status: 400 });
+  const role = getRoleFromRequest(request);
+  if (!can(role, "stores:write")) {
+    return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
   }
 
-  const debtAmount = Number(body.debt_amount);
-  if (Number.isNaN(debtAmount) || debtAmount < 0) {
-    return NextResponse.json({ error: "Сумма долга должна быть 0 или больше" }, { status: 400 });
+  const parsed = createStoreSchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Ошибка валидации" }, { status: 400 });
   }
 
+  const companyId = getCompanyIdFromRequest(request);
   const payload = {
-    shop_name: normalizeText(body.shop_name),
-    owner_name: normalizeText(body.owner_name),
-    phone: normalizeText(body.phone),
-    debt_amount: debtAmount,
-    note: normalizeText(body.note),
+    company_id: companyId,
+    name: parsed.data.name,
+    contact_person: parsed.data.contact_person || null,
+    phone: parsed.data.phone || null,
+    address: parsed.data.address || null,
+    notes: parsed.data.notes || null,
+    is_active: true,
   };
 
-  const { data, error } = await supabaseAdmin
-    .from("store_debts")
-    .insert(payload)
-    .select("*")
-    .single();
+  const { data, error } = await supabaseAdmin.from("stores").insert(payload).select("*").single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

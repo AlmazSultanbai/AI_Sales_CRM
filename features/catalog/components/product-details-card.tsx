@@ -27,11 +27,25 @@ function formatStockQuantity(value: number) {
 
 function sortVariants(variants: CollectionModel[]) {
   return [...variants].sort((a, b) => {
-    const orderA = a.sort_order ?? 0;
-    const orderB = b.sort_order ?? 0;
-    if (orderA !== orderB) return orderA - orderB;
+    const createdA = new Date(a.created_at).getTime();
+    const createdB = new Date(b.created_at).getTime();
+    if (createdA !== createdB) return createdA - createdB;
     return a.model_code.localeCompare(b.model_code, "ru");
   });
+}
+
+function colorDotClass(name?: string | null) {
+  const value = (name ?? "").toLowerCase();
+  if (value.includes("синий")) return "bg-blue-700";
+  if (value.includes("графит")) return "bg-slate-700";
+  if (value.includes("сер")) return "bg-slate-400";
+  if (value.includes("беж")) return "bg-amber-200";
+  if (value.includes("чер")) return "bg-black";
+  if (value.includes("бел")) return "bg-slate-200";
+  if (value.includes("олив")) return "bg-emerald-700";
+  if (value.includes("бордов")) return "bg-rose-800";
+  if (value.includes("шокол")) return "bg-amber-900";
+  return "bg-slate-500";
 }
 
 export function ProductDetailsCard({
@@ -56,7 +70,10 @@ export function ProductDetailsCard({
     [orderedVariants, currentVariantId, firstVariant]
   );
   const activeStockItems = activeVariant?.stock_items ?? [];
-  const stockQuantity = activeStockItems.reduce((sum, item) => sum + Number(item.quantity ?? 0), 0);
+  const stockQuantity = activeStockItems.reduce(
+    (sum, item) => sum + Number(item.quantity_m2 ?? item.quantity ?? 0),
+    0
+  );
   const normalizedUnit = normalizeUnitByCollectionType(collectionType, activeStockItems[0]?.unit);
   const stockUnit = unitLabel(normalizedUnit);
 
@@ -141,10 +158,7 @@ export function ProductDetailsCard({
         <div className="grid grid-cols-[52px_1fr] items-center gap-1.5 py-1">
           <span className="text-[10px] text-neutral-400">Цвет:</span>
           <div className="flex items-center gap-1.5">
-            <span
-              className="h-2.5 w-2.5 rounded-full border border-neutral-200"
-              style={{ backgroundColor: activeVariant?.color_hex ?? "#1E3A8A" }}
-            />
+            <span className={`h-2.5 w-2.5 rounded-full border border-neutral-200 ${colorDotClass(activeVariant?.color_name)}`} />
             <span className="text-xs font-semibold text-neutral-900 md:text-sm">
               {activeVariant?.color_name ?? "Темно-синий"}
             </span>

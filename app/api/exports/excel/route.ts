@@ -21,6 +21,22 @@ function formatDateTime(value: string | null | undefined) {
   return new Date(value).toLocaleString("ru-RU");
 }
 
+function paymentStatusLabel(status: string | null | undefined, paidAmount: number, totalAmount: number) {
+  if (totalAmount > 0 && paidAmount >= totalAmount) return "Оплачен";
+  if (paidAmount <= 0) return "Не оплачен";
+  return paidAmount / totalAmount <= 0.5 ? "Оплачено до 50%" : "Оплачено более 50%";
+}
+
+function paymentStatusStyle(statusLabel: string) {
+  if (statusLabel === "Оплачен") {
+    return { fill: { fgColor: { rgb: "DCFCE7" } }, font: { color: { rgb: "166534" }, bold: true } };
+  }
+  if (statusLabel === "Оплачено более 50%") {
+    return { fill: { fgColor: { rgb: "FEF3C7" } }, font: { color: { rgb: "B45309" }, bold: true } };
+  }
+  return { fill: { fgColor: { rgb: "FEE2E2" } }, font: { color: { rgb: "B91C1C" }, bold: true } };
+}
+
 export async function GET(request: NextRequest) {
   const role = getRoleFromRequest(request);
   if (!can(role, "exports:read")) {
@@ -69,7 +85,7 @@ export async function GET(request: NextRequest) {
   if (section === "stocks") {
     const { data, error } = await supabaseAdmin
       .from("stock_items")
-      .select("id,sku,material_name,model_code,color_name,quantity,quantity_m2,unit,purchase_price_per_m2,last_movement_at,created_at,updated_at,collections(name,type),collection_models(model_code)")
+      .select("id,material_name,model_code,color_name,quantity,quantity_m2,unit,purchase_price_per_m2,last_movement_at,created_at,updated_at,collections(name,type),collection_models(model_code)")
       .eq("company_id", companyId)
       .order("updated_at", { ascending: false });
 
@@ -77,7 +93,6 @@ export async function GET(request: NextRequest) {
 
     rows = (data ?? []).map((item) => ({
       ID: item.id,
-      SKU: (item as { sku?: string | null }).sku ?? "-",
       Материал: (item as { material_name?: string | null }).material_name ?? "-",
       Коллекция: (item.collections as { name?: string } | null)?.name ?? "-",
       Тип: (item.collections as { type?: string } | null)?.type ?? "-",
@@ -95,7 +110,7 @@ export async function GET(request: NextRequest) {
   if (section === "movements") {
     let query = supabaseAdmin
       .from("stock_movements")
-      .select("id,movement_type,quantity,quantity_m2,unit_price,total_amount,supplier_name,movement_date,comment,created_at,stock_items(unit,sku,material_name,color_name,collections(name),collection_models(model_code))")
+      .select("id,movement_type,quantity,quantity_m2,unit_price,total_amount,supplier_name,movement_date,comment,created_at,stock_items(unit,material_name,color_name,collections(name),collection_models(model_code))")
       .eq("company_id", companyId)
       .order("created_at", { ascending: false });
 
@@ -119,7 +134,6 @@ export async function GET(request: NextRequest) {
         Дата: formatDateTime(item.created_at),
         "Дата движения": (item as { movement_date?: string | null }).movement_date ?? "-",
         Тип: item.movement_type,
-        SKU: (stockItem as { sku?: string } | null)?.sku ?? "-",
         Материал: (stockItem as { material_name?: string } | null)?.material_name ?? "-",
         Коллекция: stockItem?.collections?.name ?? "-",
         Модель: stockItem?.collection_models?.model_code ?? "-",
@@ -146,9 +160,9 @@ export async function GET(request: NextRequest) {
     rows = (data ?? []).map((item) => ({
       ID: item.id,
       Магазин: item.name,
+      Адрес: item.address ?? "-",
       Контакт: item.contact_person ?? "-",
       Телефон: item.phone ?? "-",
-      Адрес: item.address ?? "-",
       Статус: item.is_active ? "Активный" : "Неактивный",
       "Сумма закупок": Number(item.total_purchases_sum ?? 0),
       Оплачено: Number(item.total_paid_sum ?? 0),
@@ -248,7 +262,7 @@ export async function GET(request: NextRequest) {
     let query = supabaseAdmin
       .from("orders")
       .select(
-        "id,order_number,order_date,address,client_name,phone,total_amount,installation_amount,workshop_total,materials_cost_total,gross_profit,status,comment,order_items(material_name_snapshot,model_snapshot,color_snapshot,quantity_m2,unit,sale_price_per_m2,sale_amount)"
+        "id,order_number,order_date,address,client_name,phone,total_amount,paid_amount,debt_amount,payment_status,installation_amount,workshop_total,materials_cost_total,gross_profit,status,comment,order_items(material_name_snapshot,model_snapshot,color_snapshot,quantity_m2,unit,sale_price_per_m2,sale_amount)"
       )
       .eq("company_id", companyId)
       .order("order_date", { ascending: false });
@@ -265,6 +279,12 @@ export async function GET(request: NextRequest) {
       order_number: string;
       order_date: string;
       client_name?: string | null;
+      address?: string | null;
+      phone?: string | null;
+      total_amount?: number | null;
+      paid_amount?: number | null;
+      debt_amount?: number | null;
+      payment_status?: string | null;
       status: string;
       comment?: string | null;
       order_items?: Array<{
@@ -280,16 +300,29 @@ export async function GET(request: NextRequest) {
 
     const totalOrders = orders.length;
     let totalQuantity = 0;
-    let totalAmount = 0;
+    let totalLineAmount = 0;
+    let totalOrderAmount = 0;
+    let totalPaidAmount = 0;
+    let totalDebtAmount = 0;
 
     rows = orders.flatMap((order) => {
       const items = order.order_items ?? [];
+      const orderAmount = Number(order.total_amount ?? 0);
+      const paidAmount = Number(order.paid_amount ?? 0);
+      const debtAmount = Number(order.debt_amount ?? Math.max(orderAmount - paidAmount, 0));
+      const orderPaymentStatus = paymentStatusLabel(order.payment_status, paidAmount, orderAmount);
+      totalOrderAmount += orderAmount;
+      totalPaidAmount += paidAmount;
+      totalDebtAmount += debtAmount;
+
       if (!items.length) {
         return [
           {
             "Номер заказа": order.order_number,
             "Дата заказа": order.order_date,
             "Клиент / Магазин": order.client_name ?? "-",
+            Адрес: order.address ?? "-",
+            Телефон: order.phone ?? "-",
             "Товар / Материал": "-",
             Профиль: "-",
             Цвет: "-",
@@ -297,23 +330,29 @@ export async function GET(request: NextRequest) {
             "Ед. изм.": "-",
             Цена: 0,
             Сумма: 0,
+            "Общая сумма": orderAmount,
+            Оплачено: paidAmount,
+            Долг: debtAmount,
+            "Статус оплаты": orderPaymentStatus,
             "Статус заказа": order.status,
             Комментарий: order.comment ?? "",
           },
         ];
       }
 
-      return items.map((item) => {
+      return items.map((item, itemIndex) => {
         const quantity = Number(item.quantity_m2 ?? 0);
         const price = Number(item.sale_price_per_m2 ?? 0);
         const amount = Number(item.sale_amount ?? quantity * price);
         totalQuantity += quantity;
-        totalAmount += amount;
+        totalLineAmount += amount;
 
         return {
           "Номер заказа": order.order_number,
           "Дата заказа": order.order_date,
           "Клиент / Магазин": order.client_name ?? "-",
+          Адрес: order.address ?? "-",
+          Телефон: order.phone ?? "-",
           "Товар / Материал": item.material_name_snapshot ?? "-",
           Профиль: item.model_snapshot ?? "-",
           Цвет: item.color_snapshot ?? "-",
@@ -321,6 +360,10 @@ export async function GET(request: NextRequest) {
           "Ед. изм.": item.unit ?? "m2",
           Цена: price,
           Сумма: amount,
+          "Общая сумма": itemIndex === 0 ? orderAmount : "",
+          Оплачено: itemIndex === 0 ? paidAmount : "",
+          Долг: itemIndex === 0 ? debtAmount : "",
+          "Статус оплаты": itemIndex === 0 ? orderPaymentStatus : "",
           "Статус заказа": order.status,
           Комментарий: order.comment ?? "",
         };
@@ -332,13 +375,19 @@ export async function GET(request: NextRequest) {
         "Номер заказа": `ИТОГО заказов: ${totalOrders}`,
         "Дата заказа": "",
         "Клиент / Магазин": "",
+        Адрес: "",
+        Телефон: "",
         "Товар / Материал": "",
         Профиль: "",
         Цвет: "",
         Количество: totalQuantity,
         "Ед. изм.": "",
         Цена: "",
-        Сумма: totalAmount,
+        Сумма: totalLineAmount,
+        "Общая сумма": totalOrderAmount,
+        Оплачено: totalPaidAmount,
+        Долг: totalDebtAmount,
+        "Статус оплаты": "",
         "Статус заказа": "",
         Комментарий: "",
       });
@@ -356,6 +405,15 @@ export async function GET(request: NextRequest) {
           },
         ];
   const worksheet = utils.json_to_sheet(sheetData);
+  if (section === "orders" && rows.length) {
+    const statusColumn = Object.keys(rows[0]).indexOf("Статус оплаты");
+    if (statusColumn >= 0) {
+      for (let row = 1; row <= rows.length; row += 1) {
+        const cell = worksheet[utils.encode_cell({ r: row, c: statusColumn })] as { v?: unknown; s?: unknown } | undefined;
+        if (cell?.v) cell.s = paymentStatusStyle(String(cell.v));
+      }
+    }
+  }
   utils.book_append_sheet(workbook, worksheet, sheetName.slice(0, 31));
 
   const fileBuffer = write(workbook, { type: "buffer", bookType: "xlsx" });

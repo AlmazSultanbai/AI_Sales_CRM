@@ -61,10 +61,8 @@ export function InventoryPage() {
   useEffect(() => {
     const collection = searchParams.get("collectionId") ?? "";
     const model = searchParams.get("modelId") ?? "";
-    const sku = searchParams.get("sku") ?? "";
     if (collection) setCollectionId(collection);
     if (model) setModelId(model);
-    if (sku) setSearch(sku);
   }, [searchParams]);
 
   const filters = useMemo(
@@ -103,7 +101,7 @@ export function InventoryPage() {
           <CardContent className="space-y-1 p-5">
             <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Всего товаров</p>
             <p className="text-3xl font-bold text-ink">{summary.totalItems}</p>
-            <p className="text-xs text-muted">SKU</p>
+            <p className="text-xs text-muted">позиции</p>
           </CardContent>
         </Card>
         <Card>
@@ -342,10 +340,11 @@ export function InventoryPage() {
             console.error(error);
             toast({
               title: "Ошибка сохранения",
-              description: "Не удалось сохранить движение. Попробуйте снова.",
+              description: error instanceof Error ? error.message : "Не удалось сохранить движение. Попробуйте снова.",
               duration: 3500,
               variant: "error",
             });
+            throw error;
           }
         }}
       />

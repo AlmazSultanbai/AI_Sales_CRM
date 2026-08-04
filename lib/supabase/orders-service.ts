@@ -8,7 +8,6 @@ type PersistedOrderItem = {
   collection_id: string | null;
   collection_model_id: string | null;
   material_name_snapshot: string;
-  sku_snapshot: string | null;
   unit: ItemUnit;
   quantity_m2: number;
   cost_price_per_m2: number;
@@ -21,7 +20,6 @@ type StockRow = {
   material_name: string | null;
   model_code: string | null;
   color_name: string | null;
-  sku: string | null;
   quantity: number;
   quantity_m2: number;
   unit: ItemUnit;
@@ -95,7 +93,7 @@ export function generateOrderNumber() {
 
 export async function assertStockAvailability(companyId: string, items: PersistedOrderItem[]) {
   const stockRows = await resolveStockRowsByItems(companyId, items);
-  const requiredByStockId = new Map<string, { required: number; label: string; sku: string | null }>();
+  const requiredByStockId = new Map<string, { required: number; label: string }>();
 
   for (const item of items) {
     const stockRow = item.stock_item_id
@@ -122,7 +120,6 @@ export async function assertStockAvailability(companyId: string, items: Persiste
     requiredByStockId.set(key, {
       required: nextRequired,
       label: item.material_name_snapshot,
-      sku: stockRow.sku,
     });
   }
 
@@ -132,7 +129,7 @@ export async function assertStockAvailability(companyId: string, items: Persiste
     const available = toNumber(stockRow.quantity_m2 ?? stockRow.quantity);
     if (requiredInfo.required > available) {
       throw new Error(
-        `На складе не осталось "${requiredInfo.label}" (${requiredInfo.sku ?? "-"}) — доступно ${available}, требуется ${requiredInfo.required}`
+        `На складе не осталось "${requiredInfo.label}" — доступно ${available}, требуется ${requiredInfo.required}`
       );
     }
   }
@@ -145,7 +142,7 @@ async function resolveStockRowsByItems(companyId: string, items: PersistedOrderI
   let query = supabaseAdmin
     .from("stock_items")
     .select(
-      "id,collection_id,collection_model_id,material_name,model_code,color_name,sku,quantity,quantity_m2,unit,purchase_price_per_m2"
+      "id,collection_id,collection_model_id,material_name,model_code,color_name,quantity,quantity_m2,unit,purchase_price_per_m2"
     )
     .eq("company_id", companyId);
 
@@ -201,7 +198,7 @@ export async function applyStockForOrder(params: ApplyStockParams) {
 
       if (params.movementType === "outgoing" && nextQuantity < 0) {
         throw new Error(
-          `Недостаточно остатка для "${item.material_name_snapshot}" (${stockRow.sku ?? "-"}): доступно ${currentQuantity}`
+          `Недостаточно остатка для "${item.material_name_snapshot}": доступно ${currentQuantity}`
         );
       }
 

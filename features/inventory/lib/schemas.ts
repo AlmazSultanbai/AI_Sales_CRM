@@ -22,18 +22,44 @@ export const createStockMovementSchema = z.object({
   material_name: z.string().trim().optional().nullable(),
   model_code: z.string().trim().optional().nullable(),
   color_name: z.string().trim().optional().nullable(),
-  sku: z.string().trim().min(1, "SKU обязателен"),
   photo_url: z.string().url().optional().nullable(),
   movement_type: stockMovementTypeSchema,
   supplier_name: z.string().trim().optional().nullable(),
   source_store_id: z.string().uuid().optional().nullable(),
   destination_store_id: z.string().uuid().optional().nullable(),
   movement_date: z.string().min(1, "Дата обязательна"),
-  quantity_m2: z.coerce.number().positive("Количество должно быть больше 0"),
+  quantity_m2: z.coerce.number(),
   unit_price: z.coerce.number().min(0, "Цена закупки должна быть >= 0").default(0),
   sale_price_per_m2: z.coerce.number().min(0, "Цена продажи должна быть >= 0").optional().nullable(),
   low_stock_threshold: z.coerce.number().min(0).optional(),
+  password: z.string().optional(),
   comment: z.string().trim().optional().nullable(),
+}).superRefine((data, ctx) => {
+  if (data.movement_type === "adjustment") {
+    if (data.quantity_m2 === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["quantity_m2"],
+        message: "Изменение должно быть больше 0",
+      });
+    }
+    if (!data.password?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["password"],
+        message: "Введите пароль для подтверждения корректировки",
+      });
+    }
+    return;
+  }
+
+  if (data.quantity_m2 <= 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["quantity_m2"],
+      message: "Количество должно быть больше 0",
+    });
+  }
 });
 
 export const stockHistoryQuerySchema = z.object({

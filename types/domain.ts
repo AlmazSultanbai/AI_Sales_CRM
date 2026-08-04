@@ -7,14 +7,12 @@ export type CollectionModel = {
   collection_id: string;
   model_code: string;
   color_name: string;
-  color_hex: string;
   price_per_m2: number;
   image_url?: string | null;
-  sku?: string | null;
   is_active?: boolean;
-  sort_order?: number;
   stock_items?: {
     quantity: number;
+    quantity_m2?: number;
     unit: "m2" | "meter" | "piece" | "pack";
   }[];
   created_at: string;
@@ -54,7 +52,6 @@ export type StockItem = {
   material_name?: string | null;
   model_code?: string | null;
   color_name?: string | null;
-  sku?: string | null;
   photo_url?: string | null;
   quantity: number;
   quantity_m2?: number;
@@ -74,9 +71,7 @@ export type StockItem = {
     id: string;
     model_code: string;
     color_name: string;
-    color_hex: string;
     image_url?: string | null;
-    sku?: string | null;
   } | null;
 };
 
@@ -129,6 +124,7 @@ export type Debt = {
 export type PurchaseStatus = "paid" | "partial" | "unpaid";
 export type PaymentMethod = "cash" | "bank" | "card" | "transfer";
 export type OrderStatus = "draft" | "confirmed" | "completed" | "cancelled";
+export type OrderPaymentStatus = "unpaid" | "partial" | "paid";
 
 export type PurchaseItem = {
   id: string;
@@ -184,7 +180,6 @@ export type OrderItem = {
   material_name_snapshot: string;
   model_snapshot: string | null;
   color_snapshot: string | null;
-  sku_snapshot: string | null;
   unit: "m2" | "meter" | "piece" | "pack";
   quantity_m2: number;
   sale_price_per_m2: number;
@@ -203,6 +198,9 @@ export type Order = {
   client_name: string | null;
   phone: string | null;
   total_amount: number;
+  paid_amount: number;
+  debt_amount: number;
+  payment_status: OrderPaymentStatus;
   installation_amount: number;
   workshop_total: number;
   materials_sale_total: number;
@@ -217,4 +215,17 @@ export type Order = {
   created_at: string;
   updated_at: string;
   order_items?: OrderItem[];
+  order_payments?: OrderPayment[];
+};
+
+export type OrderPayment = {
+  id: string;
+  company_id: string;
+  order_id: string;
+  amount: number;
+  payment_date: string;
+  payment_method: PaymentMethod;
+  comment: string | null;
+  created_by: string | null;
+  created_at: string;
 };

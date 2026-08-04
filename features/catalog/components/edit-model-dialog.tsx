@@ -24,6 +24,7 @@ export function EditModelDialog({
   model,
   trigger,
   onSubmit,
+  onDelete,
   onMediaChanged,
   disabled,
   open,
@@ -33,6 +34,7 @@ export function EditModelDialog({
   model: CollectionModel;
   trigger: React.ReactNode;
   onSubmit: (payload: UpdateModelInput) => Promise<void>;
+  onDelete?: (password: string) => Promise<void>;
   onMediaChanged?: () => Promise<void>;
   disabled?: boolean;
   open?: boolean;
@@ -55,10 +57,7 @@ export function EditModelDialog({
     defaultValues: {
       model_code: model.model_code,
       color_name: model.color_name,
-      color_hex: model.color_hex,
       price_per_m2: Number(model.price_per_m2),
-      sku: model.sku ?? "",
-      sort_order: model.sort_order ?? 0,
       is_active: model.is_active ?? true,
     },
   });
@@ -68,10 +67,7 @@ export function EditModelDialog({
       form.reset({
         model_code: model.model_code,
         color_name: model.color_name,
-        color_hex: model.color_hex,
         price_per_m2: Number(model.price_per_m2),
-        sku: model.sku ?? "",
-        sort_order: model.sort_order ?? 0,
         is_active: model.is_active ?? true,
       });
     }
@@ -82,8 +78,6 @@ export function EditModelDialog({
       const payload: UpdateModelInput = {
         ...values,
         price_per_m2: values.price_per_m2 !== undefined ? Number(values.price_per_m2) : undefined,
-        sort_order: values.sort_order !== undefined ? Number(values.sort_order) : undefined,
-        sku: values.sku ?? null,
       };
       await onSubmit(payload);
       toast({
@@ -102,6 +96,35 @@ export function EditModelDialog({
       });
     }
   });
+
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    const firstConfirm = window.confirm(`Удалить модель ${model.model_code}?`);
+    if (!firstConfirm) return;
+    const secondConfirm = window.confirm("Вы точно хотите удалить эту модель?");
+    if (!secondConfirm) return;
+
+    const password = window.prompt("Введите пароль для подтверждения удаления модели");
+    if (!password) return;
+
+    try {
+      await onDelete(password);
+      toast({
+        title: "Успешно удалено",
+        description: "Модель удалена",
+        variant: "success",
+        duration: 3000,
+      });
+      setDialogOpen(false);
+    } catch (error) {
+      toast({
+        title: "Ошибка удаления",
+        description: error instanceof Error ? error.message : "Не удалось удалить модель",
+        variant: "error",
+        duration: 4000,
+      });
+    }
+  };
 
   return (
     <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -134,36 +157,26 @@ export function EditModelDialog({
               </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor={`color_name_${model.id}`}>Название цвета</Label>
-                <Input id={`color_name_${model.id}`} {...form.register("color_name")} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor={`color_hex_${model.id}`}>HEX цвет</Label>
-                <Input id={`color_hex_${model.id}`} {...form.register("color_hex")} />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor={`color_name_${model.id}`}>Название цвета</Label>
+              <Input id={`color_name_${model.id}`} {...form.register("color_name")} />
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor={`sku_${model.id}`}>SKU</Label>
-                <Input id={`sku_${model.id}`} {...form.register("sku")} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor={`sort_order_${model.id}`}>Порядок</Label>
-                <Input id={`sort_order_${model.id}`} type="number" min={0} {...form.register("sort_order")} />
-              </div>
+            <div className="flex items-center gap-2">
+              <Button type="submit" disabled={disabled || form.formState.isSubmitting}>
+                Сохранить модель
+              </Button>
+              {onDelete ? (
+                <Button
+                  type="button"
+                  className="bg-rose-600 text-white hover:bg-rose-700"
+                  disabled={disabled || form.formState.isSubmitting}
+                  onClick={handleDelete}
+                >
+                  Удалить модель
+                </Button>
+              ) : null}
             </div>
-
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" className="h-4 w-4 rounded border-border" {...form.register("is_active")} />
-              Модель активна
-            </label>
-
-            <Button type="submit" disabled={disabled || form.formState.isSubmitting}>
-              Сохранить модель
-            </Button>
           </form>
         </div>
       </DialogContent>

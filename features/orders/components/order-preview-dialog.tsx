@@ -2,23 +2,12 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useToaster } from "@/components/ui/toaster";
 import { useOrder } from "@/features/orders/hooks/use-orders-queries";
-import { formatCurrency, formatOrderNumber, orderStatusMeta } from "@/features/orders/lib/view-utils";
-
-function parseAdvanceAmount(comment?: string | null) {
-  if (!comment) return 0;
-  const match = comment.match(/(?:Предоплата|Задаток):\s*([^\n]+)/i);
-  if (!match?.[1]) return 0;
-
-  return match[1]
-    .split(";")
-    .map((chunk) => {
-      const numeric = chunk.match(/([\d.,\s]+)/);
-      if (!numeric?.[1]) return 0;
-      return Number(numeric[1].replace(/\s/g, "").replace(",", "."));
-    })
-    .reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0);
-}
+import { useOrderMutations } from "@/features/orders/hooks/use-orders-queries";
+import { OrderPaymentDialog } from "@/features/orders/components/order-payment-dialog";
+import { CreateOrderPaymentInput } from "@/features/orders/lib/schemas";
+import { formatCurrency, formatOrderNumber, orderPaymentStatusMeta, orderStatusMeta } from "@/features/orders/lib/view-utils";
 
 export function OrderPreviewDialog({
   orderId,
@@ -30,11 +19,28 @@ export function OrderPreviewDialog({
   onClose: () => void;
 }) {
   const { data: order, isLoading } = useOrder(orderId ?? undefined);
+  const { createOrderPaymentMutation } = useOrderMutations();
+  const { toast } = useToaster();
 
   const materialsTotal = Number(order?.materials_sale_total || 0);
   const installationTotal = Number(order?.installation_amount || 0);
-  const advanceTotal = parseAdvanceAmount(order?.comment);
-  const payableTotal = Math.max(materialsTotal + installationTotal, 0);
+  const paidAmount = Number(order?.paid_amount || 0);
+  const debtAmount = Number(order?.debt_amount || 0);
+
+  async function addPayment(payload: CreateOrderPaymentInput) {
+    if (!order) return;
+    try {
+      await createOrderPaymentMutation.mutateAsync({ orderId: order.id, payload });
+      toast({ title: "Оплата сохранена", description: "Долг по заказу пересчитан", variant: "success" });
+    } catch (error) {
+      toast({
+        title: "Ошибка сохранения",
+        description: error instanceof Error ? error.message : "Не удалось сохранить оплату",
+        variant: "error",
+      });
+      throw error;
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : null)}>
@@ -106,13 +112,41 @@ export function OrderPreviewDialog({
                 <p className="font-semibold text-ink">{formatCurrency(installationTotal)}</p>
               </div>
               <div>
-                <p className="text-xs text-muted">Предоплата</p>
-                <p className="font-semibold text-ink">{formatCurrency(advanceTotal)}</p>
+                <p className="text-xs text-muted">Оплачено</p>
+                <p className="font-semibold text-emerald-700">{formatCurrency(paidAmount)}</p>
               </div>
               <div>
-                <p className="text-xs text-muted">Итого</p>
-                <p className="font-semibold text-ink">{formatCurrency(payableTotal)}</p>
+                <p className="text-xs text-muted">Долг</p>
+                <p className="font-semibold text-rose-700">{formatCurrency(debtAmount)}</p>
               </div>
+            </div>
+
+            <div className="rounded-xl border border-border p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-ink">Оплаты</p>
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${orderPaymentStatusMeta(order.payment_status, paidAmount, Number(order.total_amount)).className}`}>
+                    {orderPaymentStatusMeta(order.payment_status, paidAmount, Number(order.total_amount)).label}
+                  </span>
+                  <OrderPaymentDialog
+                    debtAmount={debtAmount}
+                    onCreate={addPayment}
+                    trigger={<Button size="sm" disabled={debtAmount <= 0}>+ Оплата</Button>}
+                  />
+                </div>
+              </div>
+              {(order.order_payments ?? []).length ? (
+                <div className="divide-y divide-border">
+                  {(order.order_payments ?? []).map((payment) => (
+                    <div key={payment.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <span className="text-muted">{new Date(payment.payment_date).toLocaleDateString("ru-RU")} · {payment.payment_method}</span>
+                      <span className="font-medium text-emerald-700">{formatCurrency(Number(payment.amount))}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted">Оплат пока нет</p>
+              )}
             </div>
 
             <div className="flex justify-end">

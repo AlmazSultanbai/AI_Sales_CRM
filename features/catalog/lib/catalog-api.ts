@@ -92,3 +92,16 @@ export async function updateModel(modelId: string, payload: UpdateModelInput) {
 
   return data;
 }
+
+export async function deleteModel(modelId: string, password: string): Promise<void> {
+  const response = await fetch(`/api/catalog/models/${modelId}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error ?? "Не удалось удалить модель");
+  }
+}

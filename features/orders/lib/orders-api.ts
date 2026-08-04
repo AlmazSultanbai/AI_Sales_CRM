@@ -1,5 +1,5 @@
-import { Order, StockItem } from "@/types/domain";
-import { CreateOrderInput, UpdateOrderInput } from "@/features/orders/lib/schemas";
+import { Order, OrderPayment, StockItem } from "@/types/domain";
+import { CreateOrderInput, CreateOrderPaymentInput, UpdateOrderInput } from "@/features/orders/lib/schemas";
 
 function qs(params: Record<string, string | number | undefined | null | boolean>) {
   const urlParams = new URLSearchParams();
@@ -41,13 +41,14 @@ export type OrdersListResponse = {
         id: string;
         material_name_snapshot: string;
         model_snapshot: string | null;
-        sku_snapshot: string | null;
       }>;
     }
   >;
   summary: {
     totalOrders: number;
     totalAmount: number;
+    totalPaid: number;
+    totalDebt: number;
     installationTotal: number;
     workshopTotal: number;
     profitTotal: number;
@@ -113,6 +114,15 @@ export async function deleteOrder(orderId: string) {
     method: "DELETE",
   });
   return safeJson<{ ok: boolean }>(response);
+}
+
+export async function createOrderPayment(orderId: string, payload: CreateOrderPaymentInput): Promise<OrderPayment> {
+  const response = await fetch(`/api/orders/${orderId}/payments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return safeJson<OrderPayment>(response);
 }
 
 export async function fetchOrderStockOptions(): Promise<StockItem[]> {

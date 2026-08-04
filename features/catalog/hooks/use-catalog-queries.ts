@@ -5,6 +5,7 @@ import {
   addModel,
   createCollection,
   deleteCollection,
+  deleteModel,
   fetchCollections,
   updateCollection,
   updateModel,
@@ -54,6 +55,11 @@ export function useCatalogMutations(search: string, type: string) {
     onSuccess: invalidate,
   });
 
+  const deleteModelMutation = useMutation({
+    mutationFn: ({ modelId, password }: { modelId: string; password: string }) => deleteModel(modelId, password),
+    onSuccess: invalidate,
+  });
+
   return {
     refreshCollections: invalidate,
     createCollectionMutation,
@@ -61,5 +67,6 @@ export function useCatalogMutations(search: string, type: string) {
     deleteCollectionMutation,
     addModelMutation,
     updateModelMutation,
+    deleteModelMutation,
   };
 }

@@ -13,7 +13,6 @@ type StockRow = {
   material_name: string | null;
   model_code: string | null;
   color_name: string | null;
-  sku: string | null;
   photo_url: string | null;
   quantity: number;
   quantity_m2: number;
@@ -25,7 +24,7 @@ type StockRow = {
   created_at: string;
   updated_at: string;
   collections: { id: string; name: string; type: string } | null;
-  collection_models: { id: string; model_code: string; color_name: string; color_hex: string; image_url: string | null; sku: string | null } | null;
+  collection_models: { id: string; model_code: string; color_name: string; image_url: string | null } | null;
 };
 
 function applyFilters<T extends { ilike: Function; eq: Function; gt: Function; lte: Function; or: Function }>(
@@ -35,7 +34,7 @@ function applyFilters<T extends { ilike: Function; eq: Function; gt: Function; l
   let filtered = query;
   if (params.search) {
     const search = params.search.trim();
-    filtered = filtered.or(`material_name.ilike.%${search}%,sku.ilike.%${search}%,model_code.ilike.%${search}%,color_name.ilike.%${search}%`);
+    filtered = filtered.or(`material_name.ilike.%${search}%,model_code.ilike.%${search}%,color_name.ilike.%${search}%`);
   }
   if (params.material) filtered = filtered.ilike("material_name", `%${params.material}%`);
   if (params.collection_id) filtered = filtered.eq("collection_id", params.collection_id);
@@ -67,8 +66,8 @@ export async function GET(request: NextRequest) {
   const from = (params.page - 1) * params.page_size;
   const to = from + params.page_size;
   const selectColumns = lite
-    ? "id,company_id,collection_id,collection_model_id,material_name,model_code,color_name,sku,photo_url,quantity,quantity_m2,purchase_price_per_m2,sale_price_per_m2,low_stock_threshold,last_movement_at,unit,created_at,updated_at"
-    : "id,company_id,collection_id,collection_model_id,material_name,model_code,color_name,sku,photo_url,quantity,quantity_m2,purchase_price_per_m2,sale_price_per_m2,low_stock_threshold,last_movement_at,unit,created_at,updated_at,collections(id,name,type),collection_models(id,model_code,color_name,color_hex,image_url,sku)";
+    ? "id,company_id,collection_id,collection_model_id,material_name,model_code,color_name,photo_url,quantity,quantity_m2,purchase_price_per_m2,sale_price_per_m2,low_stock_threshold,last_movement_at,unit,created_at,updated_at"
+    : "id,company_id,collection_id,collection_model_id,material_name,model_code,color_name,photo_url,quantity,quantity_m2,purchase_price_per_m2,sale_price_per_m2,low_stock_threshold,last_movement_at,unit,created_at,updated_at,collections(id,name,type),collection_models(id,model_code,color_name,image_url)";
 
   let listQuery = supabaseAdmin
     .from("stock_items")

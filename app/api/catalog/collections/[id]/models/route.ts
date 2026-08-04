@@ -32,13 +32,10 @@ export async function POST(
       collection_id: collectionId,
       model_code: parsed.data.model_code,
       color_name: parsed.data.color_name,
-      color_hex: parsed.data.color_hex,
       price_per_m2: parsed.data.price_per_m2 ?? Number(collection?.price_per_m2 ?? 0),
-      sku: parsed.data.sku || null,
-      sort_order: parsed.data.sort_order ?? 0,
       is_active: true,
     })
-    .select("id,collection_id,model_code,color_name,color_hex,price_per_m2,image_url,sku,is_active,sort_order,created_at,stock_items(quantity,unit)")
+    .select("id,collection_id,model_code,color_name,price_per_m2,image_url,is_active,created_at,stock_items(quantity,unit)")
     .single();
 
   if (error) {

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { can } from "@/lib/auth/rbac";
 import { getCompanyIdFromRequest, getRoleFromRequest } from "@/lib/auth/request-context";
 import { supabaseAdmin } from "@/lib/supabase/admin-client";
 import { createStockMovementSchema, stockHistoryQuerySchema } from "@/features/inventory/lib/schemas";
-import { generateSku } from "@/features/inventory/lib/stock-utils";
 import { defaultUnitByCollectionType, normalizeUnitByCollectionType, unitLabel } from "@/lib/units";
 import { MovementType } from "@/types/domain";
 
@@ -15,7 +15,6 @@ type StockItemRecord = {
   material_name: string | null;
   model_code: string | null;
   color_name: string | null;
-  sku: string | null;
   photo_url: string | null;
   quantity: number;
   quantity_m2: number;
@@ -27,6 +26,7 @@ type StockItemRecord = {
 
 function signedQuantity(type: MovementType, quantity: number) {
   if (type === "outgoing" || type === "transfer" || type === "writeoff") return -Math.abs(quantity);
+  if (type === "adjustment") return Number(quantity);
   return Math.abs(quantity);
 }
 
@@ -39,16 +39,6 @@ async function resolveStockItem(companyId: string, payload: ReturnType<typeof cr
       .eq("company_id", companyId)
       .single();
     return data as StockItemRecord | null;
-  }
-
-  if (payload.sku) {
-    const { data } = await supabaseAdmin
-      .from("stock_items")
-      .select("*")
-      .eq("company_id", companyId)
-      .eq("sku", payload.sku)
-      .maybeSingle();
-    if (data) return data as StockItemRecord;
   }
 
   if (payload.collection_id && payload.collection_model_id) {
@@ -73,10 +63,10 @@ async function createStockItem(companyId: string, payload: ReturnType<typeof cre
   const { data: model } = payload.collection_model_id
     ? await supabaseAdmin
         .from("collection_models")
-        .select("id,model_code,color_name,image_url,sku")
+        .select("id,model_code,color_name,image_url")
         .eq("id", payload.collection_model_id)
         .maybeSingle()
-    : { data: null as { id: string; model_code: string; color_name: string; image_url: string | null; sku: string | null } | null };
+    : { data: null as { id: string; model_code: string; color_name: string; image_url: string | null } | null };
 
   const { data: collection } = await supabaseAdmin
     .from("collections")
@@ -87,7 +77,6 @@ async function createStockItem(companyId: string, payload: ReturnType<typeof cre
   const materialName = payload.material_name ?? collection?.name ?? "Не указан";
   const modelCode = payload.model_code ?? model?.model_code ?? "-";
   const colorName = payload.color_name ?? model?.color_name ?? "Не указан";
-  const sku = payload.sku || model?.sku || generateSku(materialName, modelCode, colorName);
   const photoUrl = payload.photo_url ?? model?.image_url ?? collection?.image_url ?? null;
 
   const { data, error } = await supabaseAdmin
@@ -99,7 +88,6 @@ async function createStockItem(companyId: string, payload: ReturnType<typeof cre
       material_name: materialName,
       model_code: modelCode,
       color_name: colorName,
-      sku,
       photo_url: photoUrl,
       quantity: 0,
       quantity_m2: 0,
@@ -152,7 +140,7 @@ export async function GET(request: NextRequest) {
   let query = supabaseAdmin
     .from("stock_movements")
     .select(
-      "id,company_id,stock_item_id,type,movement_type,quantity,quantity_m2,unit_price,total_amount,supplier_name,source_store_id,destination_store_id,movement_date,comment,created_by,created_at,stock_items(id,material_name,model_code,color_name,sku,photo_url,collection_id,collection_model_id,unit)"
+      "id,company_id,stock_item_id,type,movement_type,quantity,quantity_m2,unit_price,total_amount,supplier_name,source_store_id,destination_store_id,movement_date,comment,created_by,created_at,stock_items(id,material_name,model_code,color_name,photo_url,collection_id,collection_model_id,unit)"
     )
     .eq("company_id", companyId)
     .order("created_at", { ascending: false });
@@ -190,7 +178,6 @@ export async function GET(request: NextRequest) {
           material_name?: string | null;
           model_code?: string | null;
           color_name?: string | null;
-          sku?: string | null;
           photo_url?: string | null;
           collection_id?: string | null;
           collection_model_id?: string | null;
@@ -201,7 +188,6 @@ export async function GET(request: NextRequest) {
           material_name?: string | null;
           model_code?: string | null;
           color_name?: string | null;
-          sku?: string | null;
           photo_url?: string | null;
           collection_id?: string | null;
           collection_model_id?: string | null;
@@ -291,7 +277,6 @@ export async function GET(request: NextRequest) {
         row.collection_name,
         row.stock_items?.model_code,
         row.stock_items?.color_name,
-        row.stock_items?.sku,
       ]
         .filter(Boolean)
         .join(" ")
@@ -366,10 +351,36 @@ export async function POST(request: NextRequest) {
   const companyId = getCompanyIdFromRequest(request);
   const payload = parsed.data;
 
+  if (payload.movement_type === "adjustment") {
+    const userEmail = request.headers.get("x-user-email");
+    if (!userEmail) {
+      return NextResponse.json({ error: "Не удалось определить пользователя" }, { status: 401 });
+    }
+
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return NextResponse.json({ error: "Auth не настроен" }, { status: 500 });
+    }
+
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+    });
+
+    const { error: authError } = await authClient.auth.signInWithPassword({
+      email: userEmail,
+      password: payload.password ?? "",
+    });
+
+    if (authError) {
+      return NextResponse.json({ error: "Неверный пароль" }, { status: 401 });
+    }
+  }
+
   let stockItem = await resolveStockItem(companyId, payload);
   if (!stockItem) {
     if (payload.movement_type !== "incoming" && payload.movement_type !== "adjustment") {
-      return NextResponse.json({ error: "Складская позиция не найдена для выбранного SKU" }, { status: 404 });
+      return NextResponse.json({ error: "Складская позиция не найдена для выбранной модели" }, { status: 404 });
     }
     try {
       stockItem = await createStockItem(companyId, payload);
@@ -397,7 +408,7 @@ export async function POST(request: NextRequest) {
 
   if (nextQty < 0) {
     return NextResponse.json(
-      { error: `Недостаточно остатка по SKU ${stockItem.sku ?? payload.sku}. Доступно: ${currentQty} ${unitLabel(effectiveUnit)}` },
+      { error: `Недостаточно остатка. Доступно: ${currentQty} ${unitLabel(effectiveUnit)}` },
       { status: 409 }
     );
   }
@@ -413,7 +424,6 @@ export async function POST(request: NextRequest) {
       material_name: payload.material_name ?? stockItem.material_name,
       model_code: payload.model_code ?? stockItem.model_code,
       color_name: payload.color_name ?? stockItem.color_name,
-      sku: payload.sku ?? stockItem.sku,
       photo_url: payload.photo_url ?? stockItem.photo_url,
       quantity: nextQty,
       quantity_m2: nextQty,

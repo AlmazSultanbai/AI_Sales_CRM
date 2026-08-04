@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 export function CollectionCard({
   collection,
   onDelete,
+  onDeleteModel,
   onUpdate,
   onAddModel,
   onUpdateModel,
@@ -22,6 +23,7 @@ export function CollectionCard({
 }: {
   collection: Collection;
   onDelete: (id: string, password: string) => Promise<void>;
+  onDeleteModel: (id: string, password: string) => Promise<void>;
   onAddModel: (collectionId: string, payload: CreateModelInput) => Promise<void>;
   onUpdateModel: (modelId: string, payload: UpdateModelInput) => Promise<void>;
   onUpdate: (id: string, payload: UpdateCollectionInput) => Promise<void>;
@@ -51,7 +53,6 @@ export function CollectionCard({
           const params = new URLSearchParams();
           params.set("collectionId", collection.id);
           params.set("modelId", variant.id);
-          if (variant.sku) params.set("sku", variant.sku);
           router.push(`/stocks?${params.toString()}`);
         }}
       />
@@ -76,10 +77,7 @@ export function CollectionCard({
           onOpenChange={setIsAddDialogOpen}
           hideTrigger
           onSubmit={async (payload) => {
-            await onAddModel(collection.id, {
-              ...payload,
-              sort_order: payload.sort_order ?? collection.collection_models.length,
-            });
+            await onAddModel(collection.id, payload);
           }}
         />
 
@@ -91,6 +89,9 @@ export function CollectionCard({
             hideTrigger
             onSubmit={async (payload) => {
               await onUpdateModel(activeVariant.id, payload);
+            }}
+            onDelete={async (password) => {
+              await onDeleteModel(activeVariant.id, password);
             }}
             onMediaChanged={onMediaChanged}
             trigger={<span />}

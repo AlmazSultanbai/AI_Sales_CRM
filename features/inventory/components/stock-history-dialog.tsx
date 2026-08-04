@@ -28,7 +28,7 @@ export function StockHistoryDialog({
 
   const title = useMemo(() => {
     if (!item) return "История движений";
-    return `История: ${item.material_name ?? item.collections?.name ?? "Позиция"} (${item.sku ?? "без SKU"})`;
+    return `История: ${item.material_name ?? item.collections?.name ?? "Позиция"}`;
   }, [item]);
 
   return (

@@ -20,6 +20,9 @@ type OrderRow = {
   client_name: string | null;
   phone: string | null;
   total_amount: number;
+  paid_amount: number;
+  debt_amount: number;
+  payment_status: "unpaid" | "partial" | "paid";
   installation_amount: number;
   workshop_total: number;
   materials_sale_total: number;
@@ -37,7 +40,6 @@ type OrderRow = {
     id: string;
     material_name_snapshot: string;
     model_snapshot: string | null;
-    sku_snapshot: string | null;
   }>;
 };
 
@@ -62,7 +64,7 @@ export async function GET(request: NextRequest) {
   let query = supabaseAdmin
     .from("orders")
     .select(
-      "id,company_id,order_number,order_date,address,client_name,phone,total_amount,installation_amount,workshop_total,materials_sale_total,materials_cost_total,total_expenses,gross_profit,margin_percent,comment,status,stock_applied,created_by,created_at,updated_at,order_items(id,material_name_snapshot,model_snapshot,sku_snapshot)"
+      "id,company_id,order_number,order_date,address,client_name,phone,total_amount,paid_amount,debt_amount,payment_status,installation_amount,workshop_total,materials_sale_total,materials_cost_total,total_expenses,gross_profit,margin_percent,comment,status,stock_applied,created_by,created_at,updated_at,order_items(id,material_name_snapshot,model_snapshot)"
     )
     .eq("company_id", companyId)
     .order("updated_at", { ascending: false });
@@ -110,6 +112,8 @@ export async function GET(request: NextRequest) {
     (acc, row) => {
       acc.totalOrders += 1;
       acc.totalAmount += toNumber(row.total_amount);
+      acc.totalPaid += toNumber(row.paid_amount);
+      acc.totalDebt += toNumber(row.debt_amount);
       acc.installationTotal += toNumber(row.installation_amount);
       acc.workshopTotal += toNumber(row.workshop_total);
       acc.profitTotal += toNumber(row.gross_profit);
@@ -120,6 +124,8 @@ export async function GET(request: NextRequest) {
     {
       totalOrders: 0,
       totalAmount: 0,
+      totalPaid: 0,
+      totalDebt: 0,
       installationTotal: 0,
       workshopTotal: 0,
       profitTotal: 0,
@@ -135,6 +141,8 @@ export async function GET(request: NextRequest) {
     items: pagedRows.map((row) => ({
       ...row,
       total_amount: toNumber(row.total_amount),
+      paid_amount: toNumber(row.paid_amount),
+      debt_amount: toNumber(row.debt_amount),
       installation_amount: toNumber(row.installation_amount),
       workshop_total: toNumber(row.workshop_total),
       materials_sale_total: toNumber(row.materials_sale_total),
@@ -183,6 +191,13 @@ export async function POST(request: NextRequest) {
     workshop_total: payload.workshop_total ?? null,
   });
 
+  if (toNumber(payload.initial_payment_amount) > totals.total_amount) {
+    return NextResponse.json(
+      { error: "Предоплата не может превышать общую сумму заказа" },
+      { status: 400 }
+    );
+  }
+
   try {
     await assertStockAvailability(
       companyId,
@@ -192,7 +207,6 @@ export async function POST(request: NextRequest) {
         collection_id: item.collection_id ?? null,
         collection_model_id: item.collection_model_id ?? null,
         material_name_snapshot: item.material_name_snapshot,
-        sku_snapshot: item.sku_snapshot ?? null,
         unit: item.unit,
         quantity_m2: toNumber(item.quantity_m2),
         cost_price_per_m2: toNumber(item.cost_price_per_m2),
@@ -245,7 +259,6 @@ export async function POST(request: NextRequest) {
         material_name_snapshot: item.material_name_snapshot,
         model_snapshot: item.model_snapshot ?? null,
         color_snapshot: item.color_snapshot ?? null,
-        sku_snapshot: item.sku_snapshot ?? null,
         unit: item.unit,
         quantity_m2: item.quantity_m2,
         sale_price_per_m2: item.sale_price_per_m2,
@@ -261,6 +274,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: itemsError?.message ?? "Не удалось сохранить позиции заказа" }, { status: 500 });
   }
 
+  if (toNumber(payload.initial_payment_amount) > 0) {
+    const { error: paymentError } = await supabaseAdmin.from("order_payments").insert({
+      company_id: companyId,
+      order_id: order.id,
+      amount: toNumber(payload.initial_payment_amount),
+      payment_date: payload.order_date,
+      payment_method: "cash",
+      comment: "Предоплата при создании заказа",
+      created_by: userId,
+    });
+
+    if (paymentError) {
+      await supabaseAdmin.from("orders").delete().eq("id", order.id);
+      return NextResponse.json({ error: paymentError.message }, { status: 500 });
+    }
+  }
+
   try {
     if (shouldApplyStock(order.status)) {
       await applyStockForOrder({
@@ -273,7 +303,6 @@ export async function POST(request: NextRequest) {
           collection_id: item.collection_id,
           collection_model_id: item.collection_model_id,
           material_name_snapshot: item.material_name_snapshot,
-          sku_snapshot: item.sku_snapshot,
           unit: item.unit,
           quantity_m2: toNumber(item.quantity_m2),
           cost_price_per_m2: toNumber(item.cost_price_per_m2),
@@ -296,7 +325,7 @@ export async function POST(request: NextRequest) {
 
   const { data: fullOrder, error: fullOrderError } = await supabaseAdmin
     .from("orders")
-    .select("*,order_items(*)")
+    .select("*,order_items(*),order_payments(*)")
     .eq("id", order.id)
     .single();
   if (fullOrderError) return NextResponse.json({ error: fullOrderError.message }, { status: 500 });

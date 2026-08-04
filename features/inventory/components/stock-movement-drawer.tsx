@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { X } from "lucide-react";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createStockMovementSchema, CreateStockMovementInput } from "@/features/inventory/lib/schemas";
-import { formatSom, generateSku, movementTypeLabel } from "@/features/inventory/lib/stock-utils";
+import { formatSom, movementTypeLabel } from "@/features/inventory/lib/stock-utils";
 import { ProductThumb } from "@/features/media/components/product-thumb";
 import { z } from "zod";
 import { normalizeUnitByCollectionType, unitLabelLong } from "@/lib/units";
@@ -23,6 +23,8 @@ function asMovementType(type: MovementType): "incoming" | "outgoing" | "transfer
   if (type === "writeoff") return "outgoing";
   return type as "incoming" | "outgoing" | "transfer" | "adjustment";
 }
+
+const QUANTITY_EPSILON = 0.000001;
 
 type StockMovementFormValues = z.input<typeof createStockMovementSchema>;
 
@@ -50,10 +52,9 @@ export function StockMovementDrawer({
       movement_type: effectiveMovementType,
       collection_id: null,
       collection_model_id: null,
-      sku: "",
       supplier_name: "",
       movement_date: todayISO(),
-      quantity_m2: 1,
+      quantity_m2: undefined,
       unit_price: 0,
       sale_price_per_m2: null,
       comment: "",
@@ -63,9 +64,21 @@ export function StockMovementDrawer({
 
   const collectionId = form.watch("collection_id") ?? undefined;
   const modelId = form.watch("collection_model_id") ?? undefined;
-  const quantity = Number(form.watch("quantity_m2") ?? 0);
+  const currentStockQuantity = Number(selectedStockItem?.quantity_m2 ?? selectedStockItem?.quantity ?? 0);
+  const isAdjustment = effectiveMovementType === "adjustment";
+  const isDirectSetMode = effectiveMovementType === "adjustment" || effectiveMovementType === "incoming";
+  const [directQuantityInput, setDirectQuantityInput] = useState("");
+  const rawQuantity = form.watch("quantity_m2");
   const unitPrice = Number(form.watch("unit_price") ?? 0);
+  const parsedDirectQuantity = Number(directQuantityInput.replace(",", "."));
+  const quantity = isDirectSetMode
+    ? (Number.isFinite(parsedDirectQuantity) ? parsedDirectQuantity : 0)
+    : Number(rawQuantity ?? 0);
   const total = quantity * unitPrice;
+  const movementSign = effectiveMovementType === "incoming" ? 1 : -1;
+  const projectedQuantity = isDirectSetMode
+    ? Math.max(quantity, 0)
+    : Math.max(currentStockQuantity + movementSign * quantity, 0);
 
   const selectedCollection = useMemo(
     () => collections.find((collection) => collection.id === collectionId),
@@ -78,6 +91,7 @@ export function StockMovementDrawer({
   useEffect(() => {
     if (!open) return;
 
+    const initialDirectQuantity = Number(selectedStockItem?.quantity_m2 ?? selectedStockItem?.quantity ?? 0);
     form.reset({
       movement_type: effectiveMovementType,
       stock_item_id: selectedStockItem?.id,
@@ -86,16 +100,17 @@ export function StockMovementDrawer({
       material_name: selectedStockItem?.material_name ?? selectedStockItem?.collections?.name ?? "",
       model_code: selectedStockItem?.model_code ?? selectedStockItem?.collection_models?.model_code ?? "",
       color_name: selectedStockItem?.color_name ?? selectedStockItem?.collection_models?.color_name ?? "",
-      sku: selectedStockItem?.sku ?? selectedStockItem?.collection_models?.sku ?? "",
       photo_url: selectedStockItem?.photo_url ?? selectedStockItem?.collection_models?.image_url ?? "",
       supplier_name: "",
       movement_date: todayISO(),
-      quantity_m2: 1,
+      quantity_m2: isDirectSetMode ? initialDirectQuantity : undefined,
       unit_price: Number(selectedStockItem?.purchase_price_per_m2 ?? 0),
       sale_price_per_m2: selectedStockItem?.sale_price_per_m2 == null ? null : Number(selectedStockItem.sale_price_per_m2),
       comment: "",
       low_stock_threshold: Number(selectedStockItem?.low_stock_threshold ?? 10),
+      password: "",
     });
+    setDirectQuantityInput(isDirectSetMode ? String(initialDirectQuantity) : "");
   }, [open, selectedStockItem, form, effectiveMovementType]);
 
   useEffect(() => {
@@ -120,17 +135,6 @@ export function StockMovementDrawer({
       }
     }
 
-    const currentSku = form.getValues("sku");
-    if (!currentSku) {
-      const autoSku =
-        selectedModel.sku ||
-        generateSku(
-          form.getValues("material_name") || selectedCollection?.name || "",
-          selectedModel.model_code || "",
-          selectedModel.color_name || ""
-        );
-      form.setValue("sku", autoSku);
-    }
   }, [selectedModel, selectedCollection, form, effectiveMovementType, selectedStockItem]);
 
   if (!open) return null;
@@ -153,13 +157,34 @@ export function StockMovementDrawer({
           className="space-y-4 p-5"
           onSubmit={form.handleSubmit(async (values) => {
             try {
-              const normalized = createStockMovementSchema.parse(values);
+              form.clearErrors("root");
+              let normalized: CreateStockMovementInput;
+              if (isDirectSetMode) {
+                const nextQuantity = Number(directQuantityInput.replace(",", "."));
+                if (!Number.isFinite(nextQuantity) || nextQuantity < 0) {
+                  form.setError("quantity_m2", { message: "Введите корректный остаток" });
+                  return;
+                }
+                const delta = nextQuantity - currentStockQuantity;
+                if (Math.abs(delta) <= QUANTITY_EPSILON) {
+                  form.setError("quantity_m2", { message: "Новый остаток совпадает с текущим" });
+                  return;
+                }
+                if (effectiveMovementType === "incoming" && delta < -QUANTITY_EPSILON) {
+                  form.setError("quantity_m2", { message: "Для прихода новый остаток должен быть больше или равен текущему" });
+                  return;
+                }
+                normalized = createStockMovementSchema.parse({
+                  ...values,
+                  quantity_m2: delta,
+                  comment: `[${isAdjustment ? "Корректировка" : "Приход"}: ${currentStockQuantity} → ${nextQuantity}] ${values.comment ?? ""}`.trim(),
+                });
+              } else {
+                normalized = createStockMovementSchema.parse(values);
+              }
               await onSubmit({
                 ...normalized,
                 movement_type: effectiveMovementType,
-                sku:
-                  normalized.sku ||
-                  generateSku(normalized.material_name || "", normalized.model_code || "", normalized.color_name || ""),
               });
               form.reset({
                 movement_type: effectiveMovementType,
@@ -169,18 +194,20 @@ export function StockMovementDrawer({
                 material_name: "",
                 model_code: "",
                 color_name: "",
-                sku: "",
                 photo_url: "",
                 supplier_name: "",
                 movement_date: todayISO(),
-                quantity_m2: 1,
+                quantity_m2: isDirectSetMode ? Number(selectedStockItem?.quantity_m2 ?? selectedStockItem?.quantity ?? 0) : undefined,
                 unit_price: 0,
                 sale_price_per_m2: null,
                 comment: "",
                 low_stock_threshold: 10,
+                password: "",
               });
-            } catch {
-              // Ошибку и уведомление обрабатывает родительский компонент.
+              setDirectQuantityInput(isDirectSetMode ? String(Number(selectedStockItem?.quantity_m2 ?? selectedStockItem?.quantity ?? 0)) : "");
+            } catch (error) {
+              const message = error instanceof Error ? error.message : "Проверьте заполнение полей и попробуйте снова";
+              form.setError("root", { message });
             }
           })}
         >
@@ -216,7 +243,7 @@ export function StockMovementDrawer({
                 <option value="">Выберите модель</option>
                 {modelOptions.map((model) => (
                   <option key={model.id} value={model.id}>
-                    {model.model_code}
+                    {`${model.model_code} — ${model.color_name || "Без цвета"}`}
                   </option>
                 ))}
               </select>
@@ -230,12 +257,6 @@ export function StockMovementDrawer({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>SKU</Label>
-              <Input {...form.register("sku")} />
-              {form.formState.errors.sku ? <p className="text-xs text-rose-600">{form.formState.errors.sku.message}</p> : null}
-            </div>
-
-            <div className="space-y-2">
               <Label>Дата</Label>
               <Input type="date" {...form.register("movement_date")} />
             </div>
@@ -243,12 +264,53 @@ export function StockMovementDrawer({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Количество ({unitLabelLong(currentUnit)})</Label>
-              <Input type="number" min={0.01} step={0.01} {...form.register("quantity_m2")} />
-              {form.formState.errors.quantity_m2 ? (
-                <p className="text-xs text-rose-600">{form.formState.errors.quantity_m2.message}</p>
-              ) : null}
+              <Label>Текущий остаток</Label>
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                readOnly={!isDirectSetMode}
+                value={isDirectSetMode ? directQuantityInput : currentStockQuantity}
+                placeholder={isDirectSetMode ? "Введите новый остаток" : undefined}
+                onChange={
+                  isDirectSetMode
+                    ? (event) => {
+                        const raw = event.target.value;
+                        setDirectQuantityInput(raw);
+                        const normalized = raw.replace(",", ".");
+                        const parsed = normalized === "" ? 0 : Number(normalized);
+                        form.setValue("quantity_m2", Number.isFinite(parsed) ? parsed : 0, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        });
+                      }
+                    : undefined
+                }
+              />
             </div>
+            {!isDirectSetMode ? (
+              <div className="space-y-2">
+                <Label>Изменение количества ({unitLabelLong(currentUnit)})</Label>
+                <Input type="number" min={0.01} step={0.01} placeholder="Введите количество" {...form.register("quantity_m2")} />
+                {form.formState.errors.quantity_m2 ? (
+                  <p className="text-xs text-rose-600">{form.formState.errors.quantity_m2.message}</p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Новый остаток после движения</Label>
+            <Input readOnly value={`${projectedQuantity} ${unitLabelLong(currentUnit)}`} />
+            {isDirectSetMode ? (
+              <p className="text-xs text-muted">Введите фактический остаток, система сама посчитает разницу и запишет корректировку.</p>
+            ) : null}
+            {form.formState.errors.quantity_m2 ? (
+              <p className="text-xs text-rose-600">{form.formState.errors.quantity_m2.message}</p>
+            ) : null}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Цена закупки за {unitLabelLong(currentUnit)} (сом)</Label>
               <Input type="number" min={0} step={0.01} {...form.register("unit_price")} />
@@ -281,6 +343,21 @@ export function StockMovementDrawer({
             <Textarea rows={4} {...form.register("comment")} />
           </div>
 
+          {isAdjustment ? (
+            <div className="space-y-2">
+              <Label>Пароль подтверждения</Label>
+              <Input
+                type="password"
+                placeholder="Введите пароль входа"
+                autoComplete="current-password"
+                {...form.register("password")}
+              />
+              {form.formState.errors.password ? (
+                <p className="text-xs text-rose-600">{form.formState.errors.password.message}</p>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="space-y-2">
             <Label>Фото (preview)</Label>
             <ProductThumb
@@ -298,6 +375,9 @@ export function StockMovementDrawer({
               Сохранить движение
             </Button>
           </div>
+          {form.formState.errors.root?.message ? (
+            <p className="text-right text-xs text-rose-600">{form.formState.errors.root.message}</p>
+          ) : null}
         </form>
       </aside>
     </div>

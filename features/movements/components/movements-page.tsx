@@ -150,7 +150,7 @@ export function MovementsPage() {
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input
                   className="pl-9"
-                  placeholder="Товар, SKU, модель..."
+                  placeholder="Товар, модель..."
                   value={searchValue}
                   onChange={(event) => {
                     setSearchValue(event.target.value);
@@ -272,7 +272,6 @@ export function MovementsPage() {
                   <th className="px-2 py-3 text-left font-semibold">Товар / Материал</th>
                   <th className="hidden px-2 py-3 text-left font-semibold xl:table-cell">Модель</th>
                   <th className="hidden px-2 py-3 text-left font-semibold 2xl:table-cell">Цвет</th>
-                  <th className="px-2 py-3 text-left font-semibold">SKU</th>
                   <th className="px-2 py-3 text-left font-semibold">Количество</th>
                   <th className="hidden px-2 py-3 text-left font-semibold lg:table-cell">Сумма</th>
                   <th className="hidden px-2 py-3 text-left font-semibold 2xl:table-cell">Источник / Получатель</th>
@@ -304,7 +303,6 @@ export function MovementsPage() {
                             material_name?: string | null;
                             model_code?: string | null;
                             color_name?: string | null;
-                            sku?: string | null;
                             photo_url?: string | null;
                             unit?: "m2" | "meter" | "piece" | "pack" | null;
                           }
@@ -340,9 +338,6 @@ export function MovementsPage() {
                               <span className={`h-2.5 w-2.5 rounded-full ${dotColor(stock?.color_name)}`} />
                               {stock?.color_name ?? "—"}
                             </span>
-                          </td>
-                          <td className="max-w-[170px] px-2 py-2.5 font-medium text-slate-700">
-                            <span className="block truncate">{stock?.sku ?? "—"}</span>
                           </td>
                           <td className="px-2 py-2.5 font-semibold text-ink">
                             {formatStockQuantity(Number(movement.quantity_m2 ?? movement.quantity ?? 0))} {unitLabel(stock?.unit)}

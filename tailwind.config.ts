@@ -31,7 +31,7 @@ const config: Config = {
         panel: "0 2px 10px rgba(16, 24, 40, 0.04), 0 12px 24px rgba(16, 24, 40, 0.05)",
       },
       fontFamily: {
-        sans: ["Manrope", "Segoe UI", "sans-serif"],
+        sans: ["Jost", "Arial", "sans-serif"],
       },
     },
   },

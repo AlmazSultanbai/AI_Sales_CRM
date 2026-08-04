@@ -11,7 +11,6 @@ export const orderItemSchema = z.object({
   material_name_snapshot: z.string().trim().min(1, "Укажите материал"),
   model_snapshot: z.string().trim().nullable().optional(),
   color_snapshot: z.string().trim().nullable().optional(),
-  sku_snapshot: z.string().trim().nullable().optional(),
   unit: z.enum(["m2", "meter", "piece", "pack"]).default("m2"),
   quantity_m2: z.coerce.number().positive("Количество должно быть больше 0"),
   sale_price_per_m2: z.coerce.number().nonnegative("Цена продажи должна быть 0 или больше"),
@@ -25,16 +24,24 @@ export const createOrderSchema = z.object({
   phone: z.string().trim().nullable().optional(),
   total_amount: z.coerce.number().nonnegative().nullable().optional(),
   installation_amount: z.coerce.number().nonnegative().default(0),
+  initial_payment_amount: z.coerce.number().nonnegative().default(0),
   workshop_total: z.coerce.number().nonnegative().nullable().optional(),
   comment: z.string().trim().nullable().optional(),
   status: orderStatusSchema.default("draft"),
   items: z.array(orderItemSchema).min(1, "Добавьте хотя бы один материал"),
 });
 
-export const updateOrderSchema = createOrderSchema.partial().extend({
+export const updateOrderSchema = createOrderSchema.omit({ initial_payment_amount: true }).partial().extend({
   order_number: z.string().trim().optional(),
   status: orderStatusSchema.optional(),
   items: z.array(orderItemSchema).optional(),
+});
+
+export const createOrderPaymentSchema = z.object({
+  amount: z.coerce.number().positive("Сумма оплаты должна быть больше 0"),
+  payment_date: z.string().min(1, "Укажите дату оплаты"),
+  payment_method: z.enum(["cash", "bank", "card", "transfer"]),
+  comment: z.string().trim().optional().nullable(),
 });
 
 export const orderListQuerySchema = z.object({
@@ -54,3 +61,4 @@ export const orderListQuerySchema = z.object({
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 export type UpdateOrderInput = z.infer<typeof updateOrderSchema>;
+export type CreateOrderPaymentInput = z.infer<typeof createOrderPaymentSchema>;

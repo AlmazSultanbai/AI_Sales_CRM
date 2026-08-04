@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, History } from "lucide-react";
+import { History, Pencil } from "lucide-react";
 import { ProductThumb } from "@/features/media/components/product-thumb";
 import { movementTypeLabel, stockStatusClass, formatSom, formatStockQuantity } from "@/features/inventory/lib/stock-utils";
 import { StockListItem } from "@/features/inventory/lib/stock-api";
@@ -56,7 +56,6 @@ export function StockTable({
                 <th className="hidden px-2 py-3 text-left font-semibold 2xl:table-cell">Коллекция</th>
                 <th className="px-2 py-3 text-left font-semibold">Модель</th>
                 <th className="hidden px-2 py-3 text-left font-semibold xl:table-cell">Цвет</th>
-                <th className="px-2 py-3 text-left font-semibold">SKU</th>
                 <th className="px-2 py-3 text-left font-semibold">Себест.</th>
                 <th className="hidden px-2 py-3 text-left font-semibold lg:table-cell">Продажа</th>
                 <th className="px-2 py-3 text-left font-semibold">Остаток</th>
@@ -78,9 +77,6 @@ export function StockTable({
                   <td className="hidden px-2 py-2.5 text-slate-600 2xl:table-cell">{item.collections?.name ?? "—"}</td>
                   <td className="px-2 py-2.5 text-slate-700">{item.model_code ?? item.collection_models?.model_code ?? "—"}</td>
                   <td className="hidden px-2 py-2.5 text-slate-700 xl:table-cell">{item.color_name ?? item.collection_models?.color_name ?? "—"}</td>
-                  <td className="max-w-[170px] px-2 py-2.5 font-medium text-slate-700">
-                    <span className="block truncate">{item.sku ?? item.collection_models?.sku ?? "—"}</span>
-                  </td>
                   <td className="px-2 py-2.5 font-medium text-slate-700">
                     {item.purchase_price_per_m2 == null ? "—" : formatSom(Number(item.purchase_price_per_m2))}
                   </td>
@@ -104,7 +100,7 @@ export function StockTable({
                         <History className="h-4 w-4" />
                       </Button>
                       <Button size="icon" variant="outline" onClick={() => onOpenDetails(item)} aria-label="Детали позиции">
-                        <Eye className="h-4 w-4" />
+                        <Pencil className="h-4 w-4" />
                       </Button>
                     </div>
                   </td>

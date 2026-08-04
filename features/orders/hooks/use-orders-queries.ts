@@ -3,6 +3,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   changeOrderStatus,
+  createOrderPayment,
   createOrder,
   deleteOrder,
   duplicateOrder,
@@ -12,7 +13,7 @@ import {
   OrdersFilter,
   updateOrder,
 } from "@/features/orders/lib/orders-api";
-import { CreateOrderInput, UpdateOrderInput } from "@/features/orders/lib/schemas";
+import { CreateOrderInput, CreateOrderPaymentInput, UpdateOrderInput } from "@/features/orders/lib/schemas";
 
 export function useOrders(filters: OrdersFilter, options?: { enabled?: boolean }) {
   return useQuery({
@@ -90,11 +91,21 @@ export function useOrderMutations() {
     },
   });
 
+  const createOrderPaymentMutation = useMutation({
+    mutationFn: ({ orderId, payload }: { orderId: string; payload: CreateOrderPaymentInput }) =>
+      createOrderPayment(orderId, payload),
+    onSuccess: async (_, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ["orders"] });
+      await queryClient.invalidateQueries({ queryKey: ["order", variables.orderId] });
+    },
+  });
+
   return {
     createOrderMutation,
     updateOrderMutation,
     statusOrderMutation,
     duplicateOrderMutation,
     deleteOrderMutation,
+    createOrderPaymentMutation,
   };
 }

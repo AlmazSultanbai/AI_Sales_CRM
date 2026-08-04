@@ -30,6 +30,7 @@ export function CatalogClient() {
     deleteCollectionMutation,
     addModelMutation,
     updateModelMutation,
+    deleteModelMutation,
   } = useCatalogMutations(search, activeType);
 
   const isMutating = useMemo(
@@ -38,13 +39,15 @@ export function CatalogClient() {
       updateCollectionMutation.isPending ||
       deleteCollectionMutation.isPending ||
       addModelMutation.isPending ||
-      updateModelMutation.isPending,
+      updateModelMutation.isPending ||
+      deleteModelMutation.isPending,
     [
       createCollectionMutation.isPending,
       updateCollectionMutation.isPending,
       deleteCollectionMutation.isPending,
       addModelMutation.isPending,
       updateModelMutation.isPending,
+      deleteModelMutation.isPending,
     ]
   );
 
@@ -132,6 +135,26 @@ export function CatalogClient() {
     await updateModelMutation.mutateAsync({ modelId, payload });
   };
 
+  const handleDeleteModel = async (modelId: string, password: string) => {
+    try {
+      await deleteModelMutation.mutateAsync({ modelId, password });
+      toast({
+        title: "Успешно удалено",
+        description: "Модель удалена",
+        variant: "success",
+        duration: 3000,
+      });
+    } catch (error) {
+      toast({
+        title: "Ошибка удаления",
+        description: error instanceof Error ? error.message : "Не удалось удалить модель",
+        variant: "error",
+        duration: 4000,
+      });
+      throw error;
+    }
+  };
+
   return (
     <section className="space-y-6">
       <div>
@@ -198,6 +221,7 @@ export function CatalogClient() {
                 key={collection.id}
                 collection={collection}
                 onDelete={handleDelete}
+                onDeleteModel={handleDeleteModel}
                 onAddModel={handleAddModel}
                 onUpdateModel={handleUpdateModel}
                 onUpdate={handleUpdate}

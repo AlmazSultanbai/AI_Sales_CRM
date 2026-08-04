@@ -25,7 +25,6 @@ function isApiPath(pathname: string) {
 }
 
 function isProtectedUiPath(pathname: string) {
-  if (pathname === "/") return true;
   return PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
@@ -48,6 +47,22 @@ async function getSupabaseUser(accessToken: string) {
 
   if (!response.ok) return null;
   return (await response.json()) as { id: string; email?: string | null };
+}
+
+function decodeJwtSub(accessToken: string) {
+  try {
+    const [, payload] = accessToken.split(".");
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = normalized.length % 4 === 0 ? "" : "=".repeat(4 - (normalized.length % 4));
+    const json = atob(normalized + pad);
+    const parsed = JSON.parse(json) as { sub?: string; exp?: number };
+    if (!parsed?.sub) return null;
+    if (parsed.exp && parsed.exp * 1000 < Date.now()) return null;
+    return parsed.sub;
+  } catch {
+    return null;
+  }
 }
 
 async function refreshSupabaseSession(refreshToken: string) {
@@ -166,8 +181,23 @@ export async function middleware(request: NextRequest) {
   let accessToken = request.cookies.get(AUTH_ACCESS_COOKIE)?.value;
   const refreshToken = request.cookies.get(AUTH_REFRESH_COOKIE)?.value;
   let refreshedSession: { access_token: string; refresh_token: string } | null = null;
+  const profileFromCookie = readProfileCookie(request.cookies.get(AUTH_PROFILE_COOKIE)?.value);
 
-  let user = accessToken ? await getSupabaseUser(accessToken) : null;
+  const isApi = isApiPath(pathname);
+  let user: { id: string; email?: string | null } | null = null;
+
+  // Fast path for UI routes: avoid per-navigation Supabase network verification
+  // and rely on signed JWT payload + profile cookie.
+  if (!isApi && accessToken) {
+    const decodedUserId = decodeJwtSub(accessToken);
+    if (decodedUserId) {
+      user = { id: decodedUserId };
+    }
+  }
+
+  if (!user) {
+    user = accessToken ? await getSupabaseUser(accessToken) : null;
+  }
 
   if (!user && refreshToken) {
     const refreshed = await refreshSupabaseSession(refreshToken);
@@ -189,7 +219,6 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  const profileFromCookie = readProfileCookie(request.cookies.get(AUTH_PROFILE_COOKIE)?.value);
   let resolvedProfile =
     profileFromCookie && profileFromCookie.user_id === user.id
       ? profileFromCookie

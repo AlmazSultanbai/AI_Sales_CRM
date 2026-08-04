@@ -29,7 +29,7 @@ export async function PATCH(
     .eq("id", id)
     .eq("company_id", companyId)
     .select(
-      "id,name,type,price_per_m2,image_url,company_id,created_at,updated_at,collection_models(id,collection_id,model_code,color_name,color_hex,price_per_m2,image_url,sku,is_active,sort_order,created_at,stock_items(quantity,unit))"
+      "id,name,type,price_per_m2,image_url,company_id,created_at,updated_at,collection_models(id,collection_id,model_code,color_name,price_per_m2,image_url,is_active,created_at,stock_items(quantity,unit))"
     )
     .single();
 

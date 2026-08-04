@@ -18,7 +18,7 @@ function toNumber(value: unknown) {
 async function loadOrder(companyId: string, orderId: string) {
   const { data, error } = await supabaseAdmin
     .from("orders")
-    .select("*,order_items(*)")
+    .select("*,order_items(*),order_payments(*)")
     .eq("id", orderId)
     .eq("company_id", companyId)
     .single();
@@ -29,6 +29,9 @@ async function loadOrder(companyId: string, orderId: string) {
     order_number: string;
     status: "draft" | "confirmed" | "completed" | "cancelled";
     stock_applied: boolean;
+    paid_amount: number;
+    debt_amount: number;
+    payment_status: "unpaid" | "partial" | "paid";
     order_items: Array<{
       id: string;
       stock_item_id: string | null;
@@ -37,11 +40,18 @@ async function loadOrder(companyId: string, orderId: string) {
       material_name_snapshot: string;
       model_snapshot: string | null;
       color_snapshot: string | null;
-      sku_snapshot: string | null;
       unit: "m2" | "meter" | "piece" | "pack";
       quantity_m2: number;
       sale_price_per_m2: number;
       cost_price_per_m2: number;
+    }>;
+    order_payments: Array<{
+      id: string;
+      amount: number;
+      payment_date: string;
+      payment_method: "cash" | "bank" | "card" | "transfer";
+      comment: string | null;
+      created_at: string;
     }>;
   };
 }
@@ -60,7 +70,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const { data: movements } = await supabaseAdmin
     .from("stock_movements")
-    .select("id,movement_type,quantity,quantity_m2,unit_price,total_amount,comment,movement_date,created_at,linked_order_item_id,stock_items(id,material_name,model_code,color_name,sku,unit)")
+    .select("id,movement_type,quantity,quantity_m2,unit_price,total_amount,comment,movement_date,created_at,linked_order_item_id,stock_items(id,material_name,model_code,color_name,unit)")
     .eq("company_id", companyId)
     .eq("linked_order_id", id)
     .order("created_at", { ascending: false });
@@ -137,7 +147,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           material_name_snapshot: item.material_name_snapshot,
           model_snapshot: item.model_snapshot,
           color_snapshot: item.color_snapshot,
-          sku_snapshot: item.sku_snapshot,
           unit: item.unit,
           quantity_m2: item.quantity_m2,
           sale_price_per_m2: item.sale_price_per_m2,
@@ -172,7 +181,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           collection_id: item.collection_id,
           collection_model_id: item.collection_model_id,
           material_name_snapshot: item.material_name_snapshot,
-          sku_snapshot: item.sku_snapshot,
           unit: item.unit,
           quantity_m2: toNumber(item.quantity_m2),
           cost_price_per_m2: toNumber(item.cost_price_per_m2),
@@ -203,7 +211,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             collection_id: item.collection_id,
             collection_model_id: item.collection_model_id,
             material_name_snapshot: item.material_name_snapshot,
-            sku_snapshot: item.sku_snapshot,
             unit: item.unit,
             quantity_m2: toNumber(item.quantity_m2),
             cost_price_per_m2: toNumber(item.cost_price_per_m2),
@@ -271,7 +278,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         collection_id: item.collection_id ?? null,
         collection_model_id: item.collection_model_id ?? null,
         material_name_snapshot: item.material_name_snapshot,
-        sku_snapshot: item.sku_snapshot ?? null,
         unit: item.unit,
         quantity_m2: toNumber(item.quantity_m2),
         cost_price_per_m2: toNumber(item.cost_price_per_m2),
@@ -319,7 +325,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         material_name_snapshot: item.material_name_snapshot,
         model_snapshot: item.model_snapshot ?? null,
         color_snapshot: item.color_snapshot ?? null,
-        sku_snapshot: item.sku_snapshot ?? null,
         unit: item.unit,
         quantity_m2: item.quantity_m2,
         sale_price_per_m2: item.sale_price_per_m2,
@@ -345,7 +350,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           collection_id: item.collection_id,
           collection_model_id: item.collection_model_id,
           material_name_snapshot: item.material_name_snapshot,
-          sku_snapshot: item.sku_snapshot,
           unit: item.unit,
           quantity_m2: toNumber(item.quantity_m2),
           cost_price_per_m2: toNumber(item.cost_price_per_m2),
@@ -391,7 +395,6 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         collection_id: item.collection_id,
         collection_model_id: item.collection_model_id,
         material_name_snapshot: item.material_name_snapshot,
-        sku_snapshot: item.sku_snapshot,
         unit: item.unit,
         quantity_m2: toNumber(item.quantity_m2),
         cost_price_per_m2: toNumber(item.cost_price_per_m2),

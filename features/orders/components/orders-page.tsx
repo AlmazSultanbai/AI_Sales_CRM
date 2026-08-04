@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useOrders, useOrderMutations } from "@/features/orders/hooks/use-orders-queries";
-import { formatCurrency, orderStatusMeta } from "@/features/orders/lib/view-utils";
+import { formatCurrency, orderPaymentStatusMeta, orderStatusMeta } from "@/features/orders/lib/view-utils";
 import { useToaster } from "@/components/ui/toaster";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +55,8 @@ export function OrdersPage() {
     installationTotal: 0,
     workshopTotal: 0,
     profitTotal: 0,
+    totalPaid: 0,
+    totalDebt: 0,
     cancelled: 0,
     draft: 0,
   };
@@ -195,12 +197,14 @@ export function OrdersPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-8">
         <Card><CardContent className="space-y-1 p-4"><p className="text-xs text-muted">Всего заказов</p><p className="text-2xl font-bold text-ink">{summary.totalOrders}</p></CardContent></Card>
         <Card><CardContent className="space-y-1 p-4"><p className="text-xs text-muted">На общую сумму</p><p className="text-2xl font-bold text-ink">{formatCurrency(summary.totalAmount)}</p></CardContent></Card>
         <Card><CardContent className="space-y-1 p-4"><p className="text-xs text-muted">Установка</p><p className="text-2xl font-bold text-ink">{formatCurrency(summary.installationTotal)}</p></CardContent></Card>
         <Card><CardContent className="space-y-1 p-4"><p className="text-xs text-muted">Итого цех</p><p className="text-2xl font-bold text-ink">{formatCurrency(summary.workshopTotal)}</p></CardContent></Card>
         <Card><CardContent className="space-y-1 p-4"><p className="text-xs text-muted">Прибыль</p><p className="text-2xl font-bold text-emerald-700">{formatCurrency(summary.profitTotal)}</p></CardContent></Card>
+        <Card><CardContent className="space-y-1 p-4"><p className="text-xs text-muted">Оплачено</p><p className="text-2xl font-bold text-emerald-700">{formatCurrency(summary.totalPaid)}</p></CardContent></Card>
+        <Card><CardContent className="space-y-1 p-4"><p className="text-xs text-muted">Долг по заказам</p><p className="text-2xl font-bold text-rose-600">{formatCurrency(summary.totalDebt)}</p></CardContent></Card>
         <Card><CardContent className="space-y-1 p-4"><p className="text-xs text-muted">Отмененные / Черновики</p><p className="text-2xl font-bold text-rose-600">{summary.cancelled} / {summary.draft}</p></CardContent></Card>
       </div>
 
@@ -269,6 +273,9 @@ export function OrdersPage() {
                   <th className="px-3 py-3 text-left">Телефон</th>
                   <th className="px-3 py-3 text-left">Материалы</th>
                   <th className="px-3 py-3 text-right">Сумма</th>
+                  <th className="px-3 py-3 text-right">Оплачено</th>
+                  <th className="px-3 py-3 text-right">Долг</th>
+                  <th className="px-3 py-3 text-left">Оплата</th>
                   <th className="px-3 py-3 text-right">Установка</th>
                   <th className="px-3 py-3 text-right">Итого цех</th>
                   <th className="px-3 py-3 text-right">Прибыль</th>
@@ -279,14 +286,19 @@ export function OrdersPage() {
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td className="px-3 py-8 text-center text-muted" colSpan={13}>Загрузка заказов...</td></tr>
+                  <tr><td className="px-3 py-8 text-center text-muted" colSpan={16}>Загрузка заказов...</td></tr>
                 ) : error ? (
-                  <tr><td className="px-3 py-8 text-center text-rose-600" colSpan={13}>{error.message}</td></tr>
+                  <tr><td className="px-3 py-8 text-center text-rose-600" colSpan={16}>{error.message}</td></tr>
                 ) : !orders.length ? (
-                  <tr><td className="px-3 py-8 text-center text-muted" colSpan={13}>Заказы не найдены</td></tr>
+                  <tr><td className="px-3 py-8 text-center text-muted" colSpan={16}>Заказы не найдены</td></tr>
                 ) : (
                   orders.map((order, index) => {
                     const statusMeta = orderStatusMeta(order.status);
+                    const paymentMeta = orderPaymentStatusMeta(
+                      order.payment_status,
+                      Number(order.paid_amount),
+                      Number(order.total_amount)
+                    );
                     const displayIndex = String((pagination.page - 1) * pagination.pageSize + index + 1).padStart(2, "0");
                     return (
                       <tr key={order.id} className="border-t border-border">
@@ -297,6 +309,13 @@ export function OrdersPage() {
                         <td className="px-3 py-3">{order.phone || "-"}</td>
                         <td className="px-3 py-3 text-muted">{order.materials_preview || "-"}</td>
                         <td className="px-3 py-3 text-right font-medium">{formatCurrency(Number(order.total_amount))}</td>
+                        <td className="px-3 py-3 text-right font-medium text-emerald-700">{formatCurrency(Number(order.paid_amount))}</td>
+                        <td className="px-3 py-3 text-right font-medium text-rose-700">{formatCurrency(Number(order.debt_amount))}</td>
+                        <td className="px-3 py-3">
+                          <span className={cn("inline-flex rounded-full border px-2 py-1 text-xs font-medium", paymentMeta.className)}>
+                            {paymentMeta.label}
+                          </span>
+                        </td>
                         <td className="px-3 py-3 text-right">{formatCurrency(Number(order.installation_amount))}</td>
                         <td className="px-3 py-3 text-right">{formatCurrency(Number(order.workshop_total))}</td>
                         <td className="px-3 py-3 text-right font-semibold text-emerald-700">{formatCurrency(Number(order.gross_profit))}</td>

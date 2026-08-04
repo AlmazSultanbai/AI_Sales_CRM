@@ -10,9 +10,10 @@ import { useToaster } from "@/components/ui/toaster";
 import { useCollections } from "@/features/catalog/hooks/use-catalog-queries";
 import { useOrder, useOrderMutations, useOrders, useOrderStockOptions } from "@/features/orders/hooks/use-orders-queries";
 import { OrderFeedTable } from "@/features/orders/components/order-feed-table";
+import { OrderPaymentDialog } from "@/features/orders/components/order-payment-dialog";
 import { OrderPreviewDialog } from "@/features/orders/components/order-preview-dialog";
 import { useStores } from "@/features/stores/hooks/use-stores-queries";
-import { formatCurrency, formatOrderNumber } from "@/features/orders/lib/view-utils";
+import { formatCurrency, formatOrderNumber, orderPaymentStatusMeta } from "@/features/orders/lib/view-utils";
 import { ItemUnit, unitLabel } from "@/lib/units";
 import { CatalogType, OrderStatus } from "@/types/domain";
 
@@ -24,7 +25,6 @@ type MaterialRow = {
   material_name_snapshot: string;
   model_snapshot: string | null;
   color_snapshot: string | null;
-  sku_snapshot: string | null;
   unit: ItemUnit;
   quantity_m2: number;
   sale_price_per_m2: number;
@@ -58,7 +58,6 @@ function makeMaterial(): MaterialRow {
     material_name_snapshot: "",
     model_snapshot: null,
     color_snapshot: null,
-    sku_snapshot: null,
     unit: "m2",
     quantity_m2: 0,
     sale_price_per_m2: 0,
@@ -87,7 +86,7 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
   const { data: stockOptions = [] } = useOrderStockOptions();
   const { data: collections = [] } = useCollections("", "all");
   const { data: stores = [] } = useStores("", "all", "name");
-  const { createOrderMutation, updateOrderMutation, statusOrderMutation } = useOrderMutations();
+  const { createOrderMutation, updateOrderMutation, statusOrderMutation, createOrderPaymentMutation } = useOrderMutations();
 
   const [orderDate, setOrderDate] = useState(todayISO());
   const [clientName, setClientName] = useState("");
@@ -96,6 +95,7 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
   const [status, setStatus] = useState<OrderStatus>("draft");
   const [installationAmount, setInstallationAmount] = useState<number>(0);
   const [totalAmount, setTotalAmount] = useState<number | "">("");
+  const [manualTotalEnabled, setManualTotalEnabled] = useState(false);
   const [workshopTotal, setWorkshopTotal] = useState<number | "">("");
   const [blocks, setBlocks] = useState<AddressBlock[]>([makeAddress(0)]);
   const [prefilledFromStore, setPrefilledFromStore] = useState(false);
@@ -129,7 +129,6 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
               material_name_snapshot: item.material_name_snapshot,
               model_snapshot: item.model_snapshot ?? null,
               color_snapshot: item.color_snapshot ?? null,
-              sku_snapshot: item.sku_snapshot ?? null,
               unit: item.unit,
               quantity_m2: toNumber(item.quantity_m2),
               sale_price_per_m2: toNumber(item.sale_price_per_m2),
@@ -147,6 +146,7 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
     setStatus(order.status);
     setInstallationAmount(toNumber(order.installation_amount));
     setTotalAmount(toNumber(order.total_amount));
+    setManualTotalEnabled(toNumber(order.total_amount) > 0);
     setWorkshopTotal(toNumber(order.workshop_total));
     setBlocks(restoredBlocks);
   }, [order, stores]);
@@ -273,12 +273,11 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
     if (!collection) return null;
     const model = (collection.collection_models ?? [])
       .filter((item) => item.is_active !== false)
-      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))[0];
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0];
 
     const stock = stockOptions.find(
       (stockItem) =>
         stockItem.collection_model_id === model?.id ||
-        (model?.sku && stockItem.sku === model.sku) ||
         (stockItem.collection_id === collection.id &&
           stockItem.model_code === model?.model_code &&
           stockItem.color_name === model?.color_name)
@@ -291,7 +290,6 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
       material_name_snapshot: collection.name,
       model_snapshot: model?.model_code ?? null,
       color_snapshot: model?.color_name ?? null,
-      sku_snapshot: stock?.sku ?? model?.sku ?? null,
       unit: stock?.unit ?? "m2",
       quantity_m2: 0,
       sale_price_per_m2: toNumber(model?.price_per_m2 ?? collection.price_per_m2 ?? 0),
@@ -351,15 +349,9 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
     }
 
     const extraAddresses = blocks.slice(1).filter((block) => block.address.trim());
-    const advances = blocks
-      .filter((block) => block.advance_enabled && block.advance_amount > 0)
-      .map((block, index) => `Заказ №${index + 1}: ${block.advance_amount}`)
-      .join("; ");
-
     const composedComment = [
       comment,
       extraAddresses.length ? `Доп. адреса: ${extraAddresses.map((b) => `${b.address} (${b.phone || "-"})`).join("; ")}` : "",
-      advances ? `Предоплата: ${advances}` : "",
     ]
       .filter(Boolean)
       .join("\n");
@@ -369,8 +361,9 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
       address: primaryAddress,
       client_name: trimmedClient,
       phone: blocks[0]?.phone || null,
-      total_amount: totalAmount === "" ? orderNetTotal : toNumber(totalAmount),
+      total_amount: manualTotalEnabled ? toNumber(totalAmount) : orderNetTotal,
       installation_amount: toNumber(installationAmount),
+      initial_payment_amount: isCreateMode ? orderAdvanceTotal : 0,
       workshop_total: workshopTotal === "" ? null : toNumber(workshopTotal),
       comment: composedComment || null,
       status,
@@ -397,6 +390,7 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
         setStatus("draft");
         setInstallationAmount(0);
         setTotalAmount("");
+        setManualTotalEnabled(false);
         setWorkshopTotal("");
         setBlocks([makeAddress(0)]);
       } else {
@@ -439,6 +433,11 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
     }
   }
 
+  async function addOrderPayment(payload: { amount: number; payment_date: string; payment_method: "cash" | "bank" | "card" | "transfer"; comment?: string | null }) {
+    if (isCreateMode) return;
+    await createOrderPaymentMutation.mutateAsync({ orderId, payload });
+  }
+
   function exportOrdersByPeriod() {
     if (!exportDateFrom || !exportDateTo) {
       toast({
@@ -472,6 +471,57 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
           <h1 className="text-2xl font-bold text-ink sm:text-3xl">{isCreateMode ? "Новый заказ" : formatOrderNumber(order?.order_number)}</h1>
         </div>
       </div>
+
+      {!isCreateMode && order ? (
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div className="grid flex-1 gap-3 sm:grid-cols-3">
+              <div><p className="text-xs text-muted">Сумма заказа</p><p className="font-semibold text-ink">{formatCurrency(toNumber(order.total_amount))}</p></div>
+              <div><p className="text-xs text-muted">Оплачено</p><p className="font-semibold text-emerald-700">{formatCurrency(toNumber(order.paid_amount))}</p></div>
+              <div><p className="text-xs text-muted">Долг</p><p className="font-semibold text-rose-700">{formatCurrency(toNumber(order.debt_amount))}</p></div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${orderPaymentStatusMeta(order.payment_status, toNumber(order.paid_amount), toNumber(order.total_amount)).className}`}>
+                {orderPaymentStatusMeta(order.payment_status, toNumber(order.paid_amount), toNumber(order.total_amount)).label}
+              </span>
+              <OrderPaymentDialog
+                debtAmount={toNumber(order.debt_amount)}
+                onCreate={addOrderPayment}
+                trigger={<Button disabled={toNumber(order.debt_amount) <= 0}>+ Оплата</Button>}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {!isCreateMode && order ? (
+        <Card>
+          <CardContent className="space-y-3 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-semibold text-ink">История оплат</h2>
+              <span className="text-xs text-muted">{(order.order_payments ?? []).length} операций</span>
+            </div>
+            {(order.order_payments ?? []).length ? (
+              <div className="divide-y divide-border rounded-xl border border-border">
+                {(order.order_payments ?? []).map((payment) => (
+                  <div key={payment.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 text-sm">
+                    <div>
+                      <p className="font-medium text-ink">{formatCurrency(toNumber(payment.amount))}</p>
+                      <p className="text-xs text-muted">
+                        {new Date(payment.payment_date).toLocaleDateString("ru-RU")} · {payment.payment_method}
+                        {payment.comment ? ` · ${payment.comment}` : ""}
+                      </p>
+                    </div>
+                    <span className="text-xs text-emerald-700">Оплата принята</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">Оплат по этому заказу пока нет.</p>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="space-y-4">
         {blocks.map((block, blockIndex) => {
@@ -571,7 +621,6 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                             const stock = stockOptions.find(
                               (stockItem) =>
                                 stockItem.collection_model_id === model?.id ||
-                                (model?.sku && stockItem.sku === model.sku) ||
                                 (stockItem.collection_id === collection?.id &&
                                   stockItem.model_code === model?.model_code &&
                                   stockItem.color_name === model?.color_name)
@@ -583,7 +632,6 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                               material_name_snapshot: collection?.name ?? "",
                               model_snapshot: model?.model_code ?? null,
                               color_snapshot: model?.color_name ?? null,
-                              sku_snapshot: stock?.sku ?? model?.sku ?? null,
                               unit: stock?.unit ?? "m2",
                               sale_price_per_m2: toNumber(model?.price_per_m2 ?? collection?.price_per_m2 ?? 0),
                               cost_price_per_m2: toNumber(
@@ -621,7 +669,6 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                             const stock = stockOptions.find(
                               (stockItem) =>
                                 stockItem.collection_model_id === model.id ||
-                                (model.sku && stockItem.sku === model.sku) ||
                                 (stockItem.collection_id === selectedCollection?.id &&
                                   stockItem.model_code === model.model_code &&
                                   stockItem.color_name === model.color_name)
@@ -633,7 +680,6 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                               material_name_snapshot: selectedCollection?.name ?? "",
                               model_snapshot: model.model_code ?? null,
                               color_snapshot: model.color_name ?? null,
-                              sku_snapshot: stock?.sku ?? model.sku ?? null,
                               unit: stock?.unit ?? "m2",
                               sale_price_per_m2: toNumber(model.price_per_m2 ?? selectedCollection?.price_per_m2 ?? 0),
                               cost_price_per_m2: toNumber(
@@ -645,7 +691,7 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                           <option value="">{selectedCollection ? "Цвет" : "Сначала материал"}</option>
                           {colorOptions.map((model) => (
                             <option key={model.id} value={model.id}>
-                              {model.model_code || "—"}
+                              {`${model.model_code || "—"} — ${model.color_name || "Без цвета"}`}
                             </option>
                           ))}
                         </select>
@@ -726,35 +772,40 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                     onChange={(e) => setInstallationAmount(toNumber(e.target.value))}
                   />
 
-                  <label className="inline-flex items-center gap-2 text-sm text-ink">
-                    <input
-                      type="checkbox"
-                      checked={block.advance_enabled}
-                      disabled={!canEdit}
-                      onChange={(e) =>
-                        patchBlock(blockIndex, {
-                          advance_enabled: e.target.checked,
-                          advance_amount: e.target.checked ? block.advance_amount : 0,
-                        })
-                      }
-                    />
-                    Предоплата
-                  </label>
+                  {isCreateMode ? (
+                    <>
+                      <label className="inline-flex items-center gap-2 text-sm text-ink">
+                        <input
+                          type="checkbox"
+                          checked={block.advance_enabled}
+                          disabled={!canEdit}
+                          onChange={(e) =>
+                            patchBlock(blockIndex, {
+                              advance_enabled: e.target.checked,
+                              advance_amount: e.target.checked ? block.advance_amount : 0,
+                            })
+                          }
+                        />
+                        Предоплата
+                      </label>
 
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    className="h-10 w-44"
-                    placeholder="Сумма предоплаты"
-                    value={block.advance_amount === 0 ? "" : block.advance_amount}
-                    disabled={!canEdit || !block.advance_enabled}
-                    onChange={(e) =>
-                      patchBlock(blockIndex, {
-                        advance_amount: Number(e.target.value || 0),
-                      })
-                    }
-                  />
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className="h-10 w-44"
+                        placeholder="Сумма предоплаты"
+                        value={block.advance_amount === 0 ? "" : block.advance_amount}
+                        disabled={!canEdit || !block.advance_enabled}
+                        onChange={(e) =>
+                          patchBlock(blockIndex, {
+                            advance_amount: Number(e.target.value || 0),
+                          })
+                        }
+                      />
+                    </>
+                  ) : null}
+
                 </div>
 
                 <div className="border-t border-border pt-2 text-sm text-muted">
@@ -763,6 +814,41 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                   <b className="text-ink">{formatCurrency(blockAdvanceTotal)}</b> · Итого:{" "}
                   <b className="text-ink">{formatCurrency(blockTotal)}</b>
                 </div>
+
+                {blockIndex === 0 ? (
+                  <div className="flex flex-wrap items-center gap-3 border-t border-border pt-2">
+                    <label className="inline-flex items-center gap-2 text-sm text-ink">
+                      <input
+                        type="checkbox"
+                        checked={manualTotalEnabled}
+                        disabled={!canEdit}
+                        onChange={(e) => {
+                          const enabled = e.target.checked;
+                          setManualTotalEnabled(enabled);
+                          if (!enabled) {
+                            setTotalAmount("");
+                          }
+                        }}
+                      />
+                      Общая сумма
+                    </label>
+
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      className="h-10 w-44"
+                      placeholder="Сумма продажи"
+                      value={totalAmount === "" ? "" : totalAmount}
+                      disabled={!canEdit || !manualTotalEnabled}
+                      onChange={(e) => setTotalAmount(toNumber(e.target.value))}
+                    />
+
+                    <span className="text-sm text-muted">
+                      Общая сумма: <b className="text-ink">{formatCurrency(manualTotalEnabled ? toNumber(totalAmount) : orderNetTotal)}</b>
+                    </span>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           );

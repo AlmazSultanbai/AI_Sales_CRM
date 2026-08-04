@@ -44,10 +44,7 @@ export function AddModelDialog({
     defaultValues: {
       model_code: "",
       color_name: "Темно-синий",
-      color_hex: "#1E3A8A",
       price_per_m2: 0,
-      sku: "",
-      sort_order: 0,
     },
   });
 
@@ -55,10 +52,7 @@ export function AddModelDialog({
     const payload: CreateModelInput = {
       model_code: values.model_code,
       color_name: values.color_name,
-      color_hex: values.color_hex,
       price_per_m2: Number(values.price_per_m2),
-      sku: values.sku ?? null,
-      sort_order: values.sort_order !== undefined ? Number(values.sort_order) : undefined,
     };
 
     await onSubmit(payload);
@@ -98,33 +92,12 @@ export function AddModelDialog({
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="color_name">Название цвета</Label>
-              <Input id="color_name" placeholder="Например: Темно-синий" {...form.register("color_name")} />
-              {form.formState.errors.color_name ? (
-                <p className="text-xs text-rose-600">{form.formState.errors.color_name.message}</p>
-              ) : null}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="color_hex">HEX цвет</Label>
-              <Input id="color_hex" placeholder="#1E3A8A" {...form.register("color_hex")} />
-              {form.formState.errors.color_hex ? (
-                <p className="text-xs text-rose-600">{form.formState.errors.color_hex.message}</p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="sku">SKU (опционально)</Label>
-              <Input id="sku" placeholder="LIS-01" {...form.register("sku")} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="sort_order">Порядок</Label>
-              <Input id="sort_order" type="number" min={0} {...form.register("sort_order")} />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="color_name">Название цвета</Label>
+            <Input id="color_name" placeholder="Например: Темно-синий" {...form.register("color_name")} />
+            {form.formState.errors.color_name ? (
+              <p className="text-xs text-rose-600">{form.formState.errors.color_name.message}</p>
+            ) : null}
           </div>
 
           <Button type="submit" disabled={disabled || form.formState.isSubmitting}>

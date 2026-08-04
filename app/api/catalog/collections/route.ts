@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   let query = supabaseAdmin
     .from("collections")
     .select(
-      "id,name,type,price_per_m2,image_url,company_id,created_at,updated_at,collection_models(id,collection_id,model_code,color_name,color_hex,price_per_m2,image_url,sku,is_active,sort_order,created_at,stock_items(quantity,unit))"
+      "id,name,type,price_per_m2,image_url,company_id,created_at,updated_at,collection_models(id,collection_id,model_code,color_name,price_per_m2,image_url,is_active,created_at,stock_items(quantity_m2,quantity,unit))"
     )
     .eq("company_id", companyId)
     .order("name", { ascending: true });
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       price_per_m2: parsed.data.price_per_m2,
     })
     .select(
-      "id,name,type,price_per_m2,image_url,company_id,created_at,updated_at,collection_models(id,collection_id,model_code,color_name,color_hex,price_per_m2,image_url,sku,is_active,sort_order,created_at,stock_items(quantity,unit))"
+      "id,name,type,price_per_m2,image_url,company_id,created_at,updated_at,collection_models(id,collection_id,model_code,color_name,price_per_m2,image_url,is_active,created_at,stock_items(quantity_m2,quantity,unit))"
     )
     .single();
 

@@ -31,7 +31,7 @@ export function StoreListPanel({
   onSelectStore: (storeId: string) => void;
 }) {
   return (
-    <aside className="flex h-[calc(100vh-10.5rem)] flex-col rounded-2xl border border-border bg-white">
+    <aside className="flex max-h-[28rem] flex-col rounded-2xl border border-border bg-white xl:h-[calc(100vh-10.5rem)] xl:max-h-none">
       <div className="space-y-3 border-b border-border p-4">
         <p className="text-sm font-semibold text-ink">Магазины</p>
 
@@ -45,7 +45,7 @@ export function StoreListPanel({
           />
         </div>
 
-        <div className="grid gap-2">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
           <select
             className="h-10 rounded-xl border border-border bg-white px-3 text-sm text-slate-700 outline-none focus:border-slate-400"
             value={filter}

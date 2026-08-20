@@ -105,7 +105,7 @@ export function MovementsPage() {
           <p className="mt-1 text-sm text-muted">Полная история всех операций по складу.</p>
         </div>
         <div className="flex w-full items-center gap-2 sm:w-auto">
-          <a href={exportLink}>
+          <a href={exportLink} className="flex-1 sm:flex-none">
             <Button variant="outline" className="w-full gap-2 sm:w-auto">
               <Download className="h-4 w-4" />
               Выгрузить в Excel
@@ -118,8 +118,8 @@ export function MovementsPage() {
       </div>
 
       <Card>
-        <CardContent className="space-y-3 p-4">
-          <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-[repeat(4,minmax(0,1fr))_minmax(240px,auto)]">
+        <CardContent className="space-y-3 p-3 sm:p-4">
+          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-[repeat(4,minmax(0,1fr))_minmax(240px,auto)]">
             <div>
               <p className="mb-1 text-xs font-medium text-slate-500">Тип операции</p>
               <select
@@ -169,7 +169,7 @@ export function MovementsPage() {
             </div>
           </div>
 
-          <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-5">
+          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
             <div>
               <p className="mb-1 text-xs font-medium text-slate-500">Модель</p>
               <Input value={model} onChange={(event) => { setModel(event.target.value); setPage(1); }} placeholder="Все модели" />
@@ -203,7 +203,7 @@ export function MovementsPage() {
             <div className="flex flex-wrap items-end justify-end gap-2">
               <Button
                 variant="outline"
-                className="w-full sm:w-auto"
+                className="min-w-[120px] flex-1 sm:flex-none"
                 onClick={() => {
                   setMovementType("all");
                   setDateFrom("");
@@ -220,7 +220,7 @@ export function MovementsPage() {
               >
                 Сбросить
               </Button>
-              <Button className="w-full gap-2 sm:w-auto">
+              <Button className="min-w-[120px] flex-1 gap-2 sm:flex-none">
                 <Filter className="h-4 w-4" />
                 Применить
               </Button>
@@ -230,7 +230,7 @@ export function MovementsPage() {
       </Card>
 
       <Card>
-        <CardContent className="grid gap-2 p-4 md:grid-cols-5">
+        <CardContent className="grid grid-cols-2 gap-2 p-3 sm:p-4 md:grid-cols-5">
           <div className="rounded-xl border border-border bg-white px-3 py-2">
             <p className="text-xs text-slate-500">Всего операций</p>
             <p className="mt-1 text-2xl font-bold text-ink">{summary.total}</p>

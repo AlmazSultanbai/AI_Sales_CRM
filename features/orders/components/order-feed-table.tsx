@@ -41,7 +41,8 @@ export function OrderFeedTable({
         <p className="text-xs text-muted">Всего: {items.length}</p>
       </div>
 
-      <div className="rounded-2xl border border-border bg-white">
+      <div className="overflow-x-auto rounded-2xl border border-border bg-white">
+        <div className="min-w-[760px]">
         <div className="grid grid-cols-[minmax(180px,1.4fr)_minmax(120px,1fr)_minmax(140px,1.2fr)_150px_150px] items-center gap-3 border-b border-border px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted">
           <span>Заказ</span>
           <span>Дата</span>
@@ -74,6 +75,7 @@ export function OrderFeedTable({
           ) : (
             <div className="px-4 py-8 text-center text-sm text-muted">Заказы не найдены по заданным фильтрам</div>
           )}
+        </div>
         </div>
       </div>
 

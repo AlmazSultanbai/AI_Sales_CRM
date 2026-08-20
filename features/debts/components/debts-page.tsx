@@ -4,7 +4,7 @@ export function DebtsPage() {
   return (
     <section className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-ink">Долги</h1>
+        <h1 className="text-2xl font-bold text-ink sm:text-3xl">Долги</h1>
         <p className="mt-2 text-sm text-muted">Мониторинг долгов, дата последней отгрузки и статус оплаты.</p>
       </div>
 

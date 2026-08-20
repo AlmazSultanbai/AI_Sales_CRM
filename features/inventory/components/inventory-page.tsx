@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Filter, History, PencilRuler, Plus, RefreshCw, Truck } from "lucide-react";
+import { FileSpreadsheet, Filter, History, PencilRuler, Plus, RefreshCw, Truck } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useCollections } from "@/features/catalog/hooks/use-catalog-queries";
 import { useStockItems, useStockMutations } from "@/features/inventory/hooks/use-stock-queries";
 import { StockTable } from "@/features/inventory/components/stock-table";
 import { StockHistoryDialog } from "@/features/inventory/components/stock-history-dialog";
 import { StockMovementDrawer } from "@/features/inventory/components/stock-movement-drawer";
+import { ExportDialog } from "@/features/exports/components/export-dialog";
 import { formatSom, formatStockQuantity } from "@/features/inventory/lib/stock-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -96,41 +97,41 @@ export function InventoryPage() {
         <p className="mt-2 text-sm text-muted">Учет остатков и движение товаров на складе.</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <Card>
-          <CardContent className="space-y-1 p-5">
-            <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Всего товаров</p>
-            <p className="text-3xl font-bold text-ink">{summary.totalItems}</p>
+          <CardContent className="space-y-1 p-3 sm:p-5">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-400 sm:text-xs">Всего товаров</p>
+            <p className="text-2xl font-bold text-ink sm:text-3xl">{summary.totalItems}</p>
             <p className="text-xs text-muted">позиции</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="space-y-1 p-5">
-            <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Общее количество</p>
-            <p className="text-3xl font-bold text-ink">{formatStockQuantity(summary.totalQuantity)}</p>
+          <CardContent className="space-y-1 p-3 sm:p-5">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-400 sm:text-xs">Общее количество</p>
+            <p className="break-words text-2xl font-bold text-ink sm:text-3xl">{formatStockQuantity(summary.totalQuantity)}</p>
             <p className="text-xs text-muted">по всем единицам</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="space-y-1 p-5">
-            <p className="text-xs uppercase tracking-[0.14em] text-slate-400">На сумму</p>
-            <p className="text-3xl font-bold text-ink">{formatSom(summary.totalAmount)}</p>
+          <CardContent className="space-y-1 p-3 sm:p-5">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-400 sm:text-xs">На сумму</p>
+            <p className="break-words text-xl font-bold text-ink sm:text-3xl">{formatSom(summary.totalAmount)}</p>
             <p className="text-xs text-muted">по закупочным ценам</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="space-y-1 p-5">
-            <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Низкий остаток</p>
-            <p className="text-3xl font-bold text-rose-600">{summary.lowStockItems}</p>
+          <CardContent className="space-y-1 p-3 sm:p-5">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-400 sm:text-xs">Низкий остаток</p>
+            <p className="text-2xl font-bold text-rose-600 sm:text-3xl">{summary.lowStockItems}</p>
             <p className="text-xs text-muted">товаров</p>
           </CardContent>
         </Card>
       </div>
 
       <Card>
-        <CardContent className="space-y-3 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
+        <CardContent className="space-y-3 p-3 sm:p-4">
+          <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
               <Button className="gap-1.5" onClick={() => { setActiveMovementType("incoming"); setDrawerOpen(true); }}>
                 <Plus className="h-4 w-4" />
                 Приход
@@ -149,11 +150,23 @@ export function InventoryPage() {
               </Button>
               <Button variant="outline" className="gap-1.5" onClick={() => setHistoryOpen(true)}>
                 <History className="h-4 w-4" />
-                История движений
+                <span className="truncate">
+                  История<span className="hidden sm:inline"> движений</span>
+                </span>
               </Button>
+
+              <ExportDialog
+                defaultSection="stocks"
+                trigger={
+                  <Button variant="outline" className="w-full gap-1.5 sm:w-auto">
+                    <FileSpreadsheet className="h-4 w-4" />
+                    Выгрузка
+                  </Button>
+                }
+              />
             </div>
 
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <div className="flex w-full flex-col gap-2 sm:flex-row 2xl:w-auto">
               <Input
                 className="sm:w-64"
                 placeholder="Поиск по складу..."
@@ -171,7 +184,7 @@ export function InventoryPage() {
           </div>
 
           {showFilters ? (
-            <div className="grid gap-2 rounded-xl border border-border bg-slate-50 p-3 md:grid-cols-2 xl:grid-cols-6">
+            <div className="grid gap-2 rounded-xl border border-border bg-slate-50 p-3 sm:grid-cols-2 xl:grid-cols-6">
               <Input
                 placeholder="Материал"
                 value={materialFilter}

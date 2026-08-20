@@ -856,26 +856,26 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
       </div>
 
       <div className="flex flex-wrap items-end justify-end gap-3">
-        <div className="w-full max-w-[160px]">
+        <div className="w-[calc(50%-0.375rem)] sm:w-full sm:max-w-[160px]">
           <p className="mb-1 text-xs text-muted">Дата от</p>
           <Input type="date" value={exportDateFrom} onChange={(e) => setExportDateFrom(e.target.value)} />
         </div>
-        <div className="w-full max-w-[160px]">
+        <div className="w-[calc(50%-0.375rem)] sm:w-full sm:max-w-[160px]">
           <p className="mb-1 text-xs text-muted">Дата до</p>
           <Input type="date" value={exportDateTo} onChange={(e) => setExportDateTo(e.target.value)} />
         </div>
         <Button
           variant="outline"
-          className="gap-2 px-5"
+          className="min-w-[160px] flex-1 gap-2 px-5 sm:flex-none"
           onClick={exportOrdersByPeriod}
         >
           <Download className="h-4 w-4" />
           Выгрузка в Excel
         </Button>
-        <Button variant="outline" className="px-5" onClick={addAddress} disabled={!canEdit}>
+        <Button variant="outline" className="min-w-[160px] flex-1 px-5 sm:flex-none" onClick={addAddress} disabled={!canEdit}>
           + Добавить заказ
         </Button>
-        <Button className="gap-1" onClick={saveOrder}>
+        <Button className="min-w-[160px] flex-1 gap-1 sm:flex-none" onClick={saveOrder}>
           <Save className="h-4 w-4" />
           Сохранить
         </Button>

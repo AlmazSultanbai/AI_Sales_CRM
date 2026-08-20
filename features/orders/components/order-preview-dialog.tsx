@@ -79,7 +79,8 @@ export function OrderPreviewDialog({
               <p className="font-medium text-ink">{order.address || "-"}</p>
             </div>
 
-            <div className="rounded-xl border border-border">
+            <div className="overflow-x-auto rounded-xl border border-border">
+              <div className="min-w-[620px]">
               <div className="grid grid-cols-[1.2fr_1fr_1fr_0.8fr_0.8fr_1fr] gap-2 border-b border-border px-3 py-2 text-xs text-muted">
                 <span>Материал</span>
                 <span>Модель</span>
@@ -99,6 +100,7 @@ export function OrderPreviewDialog({
                     <span className="font-medium text-ink">{formatCurrency(Number(item.sale_amount || 0))}</span>
                   </div>
                 ))}
+              </div>
               </div>
             </div>
 

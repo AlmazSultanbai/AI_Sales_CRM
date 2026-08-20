@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
@@ -21,6 +21,14 @@ export const metadata: Metadata = {
     title: "Sun Textile CRM",
     description: "Учет каталога, заказов, магазинов и складских остатков Sun Textile",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: "#1b2941",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -187,9 +187,9 @@ export function OrdersPage() {
             Учет заказов с автоматическим списанием материалов, движениями склада и финансовыми итогами.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/orders/new">
-            <Button className="gap-2">
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          <Link href="/orders/new" className="w-full sm:w-auto">
+            <Button className="w-full gap-2 sm:w-auto">
               <Plus className="h-4 w-4" />
               Новый заказ
             </Button>
@@ -197,21 +197,21 @@ export function OrdersPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-8">
-        <Card><CardContent className="space-y-1 p-4"><p className="text-xs text-muted">Всего заказов</p><p className="text-2xl font-bold text-ink">{summary.totalOrders}</p></CardContent></Card>
-        <Card><CardContent className="space-y-1 p-4"><p className="text-xs text-muted">На общую сумму</p><p className="text-2xl font-bold text-ink">{formatCurrency(summary.totalAmount)}</p></CardContent></Card>
-        <Card><CardContent className="space-y-1 p-4"><p className="text-xs text-muted">Установка</p><p className="text-2xl font-bold text-ink">{formatCurrency(summary.installationTotal)}</p></CardContent></Card>
-        <Card><CardContent className="space-y-1 p-4"><p className="text-xs text-muted">Итого цех</p><p className="text-2xl font-bold text-ink">{formatCurrency(summary.workshopTotal)}</p></CardContent></Card>
-        <Card><CardContent className="space-y-1 p-4"><p className="text-xs text-muted">Прибыль</p><p className="text-2xl font-bold text-emerald-700">{formatCurrency(summary.profitTotal)}</p></CardContent></Card>
-        <Card><CardContent className="space-y-1 p-4"><p className="text-xs text-muted">Оплачено</p><p className="text-2xl font-bold text-emerald-700">{formatCurrency(summary.totalPaid)}</p></CardContent></Card>
-        <Card><CardContent className="space-y-1 p-4"><p className="text-xs text-muted">Долг по заказам</p><p className="text-2xl font-bold text-rose-600">{formatCurrency(summary.totalDebt)}</p></CardContent></Card>
-        <Card><CardContent className="space-y-1 p-4"><p className="text-xs text-muted">Отмененные / Черновики</p><p className="text-2xl font-bold text-rose-600">{summary.cancelled} / {summary.draft}</p></CardContent></Card>
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 2xl:grid-cols-8">
+        <Card><CardContent className="space-y-1 p-3 sm:p-4"><p className="text-xs text-muted">Всего заказов</p><p className="text-xl font-bold text-ink sm:text-2xl">{summary.totalOrders}</p></CardContent></Card>
+        <Card><CardContent className="space-y-1 p-3 sm:p-4"><p className="text-xs text-muted">На общую сумму</p><p className="break-words text-lg font-bold text-ink sm:text-2xl">{formatCurrency(summary.totalAmount)}</p></CardContent></Card>
+        <Card><CardContent className="space-y-1 p-3 sm:p-4"><p className="text-xs text-muted">Установка</p><p className="break-words text-lg font-bold text-ink sm:text-2xl">{formatCurrency(summary.installationTotal)}</p></CardContent></Card>
+        <Card><CardContent className="space-y-1 p-3 sm:p-4"><p className="text-xs text-muted">Итого цех</p><p className="break-words text-lg font-bold text-ink sm:text-2xl">{formatCurrency(summary.workshopTotal)}</p></CardContent></Card>
+        <Card><CardContent className="space-y-1 p-3 sm:p-4"><p className="text-xs text-muted">Прибыль</p><p className="break-words text-lg font-bold text-emerald-700 sm:text-2xl">{formatCurrency(summary.profitTotal)}</p></CardContent></Card>
+        <Card><CardContent className="space-y-1 p-3 sm:p-4"><p className="text-xs text-muted">Оплачено</p><p className="break-words text-lg font-bold text-emerald-700 sm:text-2xl">{formatCurrency(summary.totalPaid)}</p></CardContent></Card>
+        <Card><CardContent className="space-y-1 p-3 sm:p-4"><p className="text-xs text-muted">Долг по заказам</p><p className="break-words text-lg font-bold text-rose-600 sm:text-2xl">{formatCurrency(summary.totalDebt)}</p></CardContent></Card>
+        <Card><CardContent className="space-y-1 p-3 sm:p-4"><p className="text-xs text-muted">Отмененные / Черновики</p><p className="text-xl font-bold text-rose-600 sm:text-2xl">{summary.cancelled} / {summary.draft}</p></CardContent></Card>
       </div>
 
       <Card>
-        <CardContent className="space-y-3 p-4">
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
-            <select className="h-10 rounded-xl border border-border bg-white px-3 text-sm" value={status} onChange={(e) => { setStatus(e.target.value as typeof status); setPage(1); }}>
+        <CardContent className="space-y-3 p-3 sm:p-4">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+            <select className="h-10 w-full rounded-xl border border-border bg-white px-3 text-sm" value={status} onChange={(e) => { setStatus(e.target.value as typeof status); setPage(1); }}>
               <option value="all">Все статусы</option>
               <option value="draft">Черновик</option>
               <option value="confirmed">Подтвержден</option>
@@ -224,7 +224,7 @@ export function OrdersPage() {
             <Input placeholder="Клиент" value={client} onChange={(e) => { setClient(e.target.value); setPage(1); }} />
             <Input placeholder="Материал" value={material} onChange={(e) => { setMaterial(e.target.value); setPage(1); }} />
           </div>
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
             <Input placeholder="Телефон" value={phone} onChange={(e) => { setPhone(e.target.value); setPage(1); }} />
             <Input placeholder="Адрес" value={address} onChange={(e) => { setAddress(e.target.value); setPage(1); }} />
             <Input placeholder="Пользователь" value={user} onChange={(e) => { setUser(e.target.value); setPage(1); }} />
@@ -241,9 +241,9 @@ export function OrdersPage() {
       </Card>
 
       <Card>
-        <CardContent className="space-y-2 p-4">
+        <CardContent className="space-y-2 p-3 sm:p-4">
           <p className="text-sm font-semibold text-ink">Выгрузка в Excel</p>
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto]">
             <div>
               <p className="mb-1 text-xs text-muted">Дата от</p>
               <Input type="date" value={exportStartDate} onChange={(e) => setExportStartDate(e.target.value)} />
@@ -252,7 +252,7 @@ export function OrdersPage() {
               <p className="mb-1 text-xs text-muted">Дата до</p>
               <Input type="date" value={exportEndDate} onChange={(e) => setExportEndDate(e.target.value)} />
             </div>
-            <Button className="gap-2 self-end" onClick={exportOrdersByPeriod}>
+            <Button className="w-full gap-2 self-end sm:col-span-2 lg:col-span-1 lg:w-auto" onClick={exportOrdersByPeriod}>
               <Download className="h-4 w-4" />
               Выгрузка в Excel
             </Button>
@@ -263,9 +263,9 @@ export function OrdersPage() {
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="w-full min-w-[1500px] text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
+                <tr className="whitespace-nowrap">
                   <th className="px-3 py-3 text-left">№ заказа</th>
                   <th className="px-3 py-3 text-left">Дата</th>
                   <th className="px-3 py-3 text-left">Адрес</th>

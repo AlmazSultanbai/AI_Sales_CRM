@@ -338,7 +338,7 @@ export function StoresPage() {
                     </div>
 
                     <TabsContent value="purchases" className="space-y-4">
-                      <div className="grid gap-2 rounded-xl border border-border bg-slate-50 p-3 lg:grid-cols-6">
+                      <div className="grid gap-2 rounded-xl border border-border bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-6">
                         <div className="lg:col-span-2">
                           <label className="mb-1 block text-xs font-medium text-muted">Статус</label>
                           <select
@@ -407,7 +407,7 @@ export function StoresPage() {
                     </TabsContent>
 
                     <TabsContent value="payments" className="space-y-4">
-                      <div className="grid gap-2 rounded-xl border border-border bg-slate-50 p-3 lg:grid-cols-4">
+                      <div className="grid gap-2 rounded-xl border border-border bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-4">
                         <div>
                           <label className="mb-1 block text-xs font-medium text-muted">Дата от</label>
                           <Input type="date" value={paymentDateFrom} onChange={(event) => setPaymentDateFrom(event.target.value)} />

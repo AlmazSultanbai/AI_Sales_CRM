@@ -15,7 +15,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="min-h-screen bg-bg lg:flex">
       <Sidebar role={role} />
-      <main className="min-h-screen flex-1 p-3 pb-24 sm:p-4 sm:pb-24 lg:p-6 lg:pb-6 xl:p-7">
+      <main className="min-h-screen w-full min-w-0 flex-1 p-3 pb-[calc(5.25rem+env(safe-area-inset-bottom))] sm:p-4 sm:pb-[calc(5.25rem+env(safe-area-inset-bottom))] lg:p-6 lg:pb-6 xl:p-7">
         <Topbar role={role} />
         <div className="crm-page">{children}</div>
       </main>

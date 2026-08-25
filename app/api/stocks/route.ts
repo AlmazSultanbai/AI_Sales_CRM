@@ -95,12 +95,31 @@ export async function GET(request: NextRequest) {
   const lastMovementMap = new Map<string, { created_at: string; movement_type: string; supplier_name: string | null; source_store_id: string | null; destination_store_id: string | null }>();
 
   if (!lite && movementItemIds.length) {
-    const { data: movements } = await supabaseAdmin
+    // Нужно только последнее движение по каждой позиции страницы.
+    // last_movement_at на позиции даёт нижнюю границу даты: всё, что старше
+    // самой ранней из них, заведомо не является ничьим последним движением.
+    const lastMovementDates = pagedRows
+      .map((item) => item.last_movement_at)
+      .filter((value): value is string => Boolean(value))
+      .sort();
+    const oldestLastMovement = lastMovementDates[0];
+
+    let movementsQuery = supabaseAdmin
       .from("stock_movements")
       .select("stock_item_id,created_at,movement_type,supplier_name,source_store_id,destination_store_id")
       .eq("company_id", companyId)
       .in("stock_item_id", movementItemIds)
       .order("created_at", { ascending: false });
+
+    if (oldestLastMovement) {
+      // Окно по дате гарантирует, что последнее движение каждой позиции внутри;
+      // ограничение сверху — просто страховка от аномального объёма.
+      movementsQuery = movementsQuery.gte("created_at", oldestLastMovement).limit(1000);
+    } else {
+      movementsQuery = movementsQuery.limit(Math.max(movementItemIds.length * 5, 50));
+    }
+
+    const { data: movements } = await movementsQuery;
 
     for (const movement of movements ?? []) {
       if (!movement.stock_item_id || lastMovementMap.has(movement.stock_item_id)) continue;

@@ -47,6 +47,30 @@ function toNumber(value: unknown) {
   return Number(value ?? 0);
 }
 
+/** Минимальный интерфейс построителя запроса — чтобы фильтры описать один раз. */
+type FilterBuilder = {
+  eq(column: string, value: unknown): FilterBuilder;
+  gte(column: string, value: unknown): FilterBuilder;
+  lte(column: string, value: unknown): FilterBuilder;
+  ilike(column: string, pattern: string): FilterBuilder;
+  in(column: string, values: readonly unknown[]): FilterBuilder;
+  or(filters: string): FilterBuilder;
+};
+
+function emptySummary() {
+  return {
+    totalOrders: 0,
+    totalAmount: 0,
+    totalPaid: 0,
+    totalDebt: 0,
+    installationTotal: 0,
+    workshopTotal: 0,
+    profitTotal: 0,
+    cancelled: 0,
+    draft: 0,
+  };
+}
+
 /**
  * У части заказов debt_amount в базе не пересчитан и хранит 0 при нулевой оплате,
  * поэтому долг всегда выводим из суммы и оплат — это единственная честная цифра.
@@ -69,81 +93,99 @@ export async function GET(request: NextRequest) {
   const companyId = getCompanyIdFromRequest(request);
   const { page, page_size: pageSize, status, date_from: dateFrom, date_to: dateTo, search, client, phone, address, material, user: userFilter } = parsed.data;
 
-  let query = supabaseAdmin
-    .from("orders")
-    .select(
-      "id,company_id,order_number,order_date,address,client_name,phone,total_amount,paid_amount,debt_amount,payment_status,installation_amount,workshop_total,materials_sale_total,materials_cost_total,total_expenses,gross_profit,margin_percent,comment,status,stock_applied,created_by,created_at,updated_at,order_items(id,material_name_snapshot,model_snapshot)"
-    )
-    .eq("company_id", companyId)
-    .order("updated_at", { ascending: false });
-
-  if (status !== "all") query = query.eq("status", status);
-  if (dateFrom) query = query.gte("order_date", dateFrom);
-  if (dateTo) query = query.lte("order_date", dateTo);
-  if (client) query = query.ilike("client_name", `%${client}%`);
-  if (phone) query = query.ilike("phone", `%${phone}%`);
-  if (address) query = query.ilike("address", `%${address}%`);
-
-  const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  let rows = (data ?? []) as OrderRow[];
-
-  if (search) {
-    const lower = search.toLowerCase();
-    rows = rows.filter((row) => {
-      const haystack = [row.order_number, row.address, row.client_name, row.phone].filter(Boolean).join(" ").toLowerCase();
-      return haystack.includes(lower);
-    });
+  // Фильтр по автору требует отдельного шага: имя хранится в таблице users.
+  let creatorIds: string[] | null = null;
+  if (userFilter) {
+    const { data: matchedUsers } = await supabaseAdmin
+      .from("users")
+      .select("id")
+      .ilike("full_name", `%${userFilter}%`);
+    creatorIds = (matchedUsers ?? []).map((row) => row.id as string);
+    if (!creatorIds.length) {
+      return NextResponse.json({
+        items: [],
+        summary: emptySummary(),
+        pagination: { page, pageSize, total: 0, totalPages: 1 },
+      });
+    }
   }
 
-  if (material) {
-    const lower = material.toLowerCase();
-    rows = rows.filter((row) => (row.order_items ?? []).some((item) => item.material_name_snapshot.toLowerCase().includes(lower)));
-  }
+  // Все фильтры уходят в базу, чтобы не тянуть все заказы на каждый экран.
+  const applyFilters = <T>(query: T): T => {
+    let filtered = query as unknown as FilterBuilder;
+    filtered = filtered.eq("company_id", companyId);
+    if (status !== "all") filtered = filtered.eq("status", status);
+    if (dateFrom) filtered = filtered.gte("order_date", dateFrom);
+    if (dateTo) filtered = filtered.lte("order_date", dateTo);
+    if (client) filtered = filtered.ilike("client_name", `%${client}%`);
+    if (phone) filtered = filtered.ilike("phone", `%${phone}%`);
+    if (address) filtered = filtered.ilike("address", `%${address}%`);
+    if (creatorIds) filtered = filtered.in("created_by", creatorIds);
+    if (search) {
+      const safe = search.replace(/[,()]/g, " ").trim();
+      if (safe) {
+        filtered = filtered.or(
+          `order_number.ilike.%${safe}%,address.ilike.%${safe}%,client_name.ilike.%${safe}%,phone.ilike.%${safe}%`
+        );
+      }
+    }
+    if (material) {
+      filtered = filtered.ilike("order_items.material_name_snapshot", `%${material}%`);
+    }
+    return filtered as unknown as T;
+  };
 
-  const userIds = Array.from(new Set(rows.map((row) => row.created_by).filter(Boolean) as string[]));
+  const itemsJoin = material ? "order_items!inner(id,material_name_snapshot,model_snapshot)" : "order_items(id,material_name_snapshot,model_snapshot)";
+  const from = (page - 1) * pageSize;
+
+  // Страница и итоги считаются двумя параллельными запросами:
+  // страница отдаёт только нужные строки, итоги — только денежные колонки.
+  const [pageResult, summaryResult] = await Promise.all([
+    applyFilters(
+      supabaseAdmin
+        .from("orders")
+        .select(
+          `id,company_id,order_number,order_date,address,client_name,phone,total_amount,paid_amount,debt_amount,payment_status,installation_amount,workshop_total,materials_sale_total,materials_cost_total,total_expenses,gross_profit,margin_percent,comment,status,stock_applied,created_by,created_at,updated_at,${itemsJoin}`,
+          { count: "exact" }
+        )
+        .order("updated_at", { ascending: false })
+    ).range(from, from + pageSize - 1),
+    applyFilters(
+      supabaseAdmin
+        .from("orders")
+        // Вложенные позиции в итогах нужны только когда по ним идёт фильтр.
+        .select(
+          material
+            ? `total_amount,paid_amount,installation_amount,workshop_total,gross_profit,status,${itemsJoin}`
+            : "total_amount,paid_amount,installation_amount,workshop_total,gross_profit,status"
+        )
+    ),
+  ]);
+
+  if (pageResult.error) return NextResponse.json({ error: pageResult.error.message }, { status: 500 });
+  if (summaryResult.error) return NextResponse.json({ error: summaryResult.error.message }, { status: 500 });
+
+  const pagedRows = (pageResult.data ?? []) as unknown as OrderRow[];
+  const total = Number(pageResult.count ?? 0);
+
+  const userIds = Array.from(new Set(pagedRows.map((row) => row.created_by).filter(Boolean) as string[]));
   const { data: userRows } = userIds.length
     ? await supabaseAdmin.from("users").select("id,full_name").in("id", userIds)
     : { data: [] as Array<{ id: string; full_name: string }> };
   const usersMap = new Map((userRows ?? []).map((user) => [user.id, user.full_name]));
 
-  if (userFilter) {
-    const lower = userFilter.toLowerCase();
-    rows = rows.filter((row) => {
-      const creatorName = row.created_by ? usersMap.get(row.created_by) ?? row.created_by : "";
-      return String(creatorName).toLowerCase().includes(lower);
-    });
-  }
-
-  const summary = rows.reduce(
-    (acc, row) => {
-      acc.totalOrders += 1;
-      acc.totalAmount += toNumber(row.total_amount);
-      acc.totalPaid += toNumber(row.paid_amount);
-      acc.totalDebt += resolveDebt(row);
-      acc.installationTotal += toNumber(row.installation_amount);
-      acc.workshopTotal += toNumber(row.workshop_total);
-      acc.profitTotal += toNumber(row.gross_profit);
-      if (row.status === "cancelled") acc.cancelled += 1;
-      if (row.status === "draft") acc.draft += 1;
-      return acc;
-    },
-    {
-      totalOrders: 0,
-      totalAmount: 0,
-      totalPaid: 0,
-      totalDebt: 0,
-      installationTotal: 0,
-      workshopTotal: 0,
-      profitTotal: 0,
-      cancelled: 0,
-      draft: 0,
-    }
-  );
-
-  const from = (page - 1) * pageSize;
-  const pagedRows = rows.slice(from, from + pageSize);
+  const summary = ((summaryResult.data ?? []) as unknown as OrderRow[]).reduce((acc, row) => {
+    acc.totalOrders += 1;
+    acc.totalAmount += toNumber(row.total_amount);
+    acc.totalPaid += toNumber(row.paid_amount);
+    acc.totalDebt += resolveDebt(row);
+    acc.installationTotal += toNumber(row.installation_amount);
+    acc.workshopTotal += toNumber(row.workshop_total);
+    acc.profitTotal += toNumber(row.gross_profit);
+    if (row.status === "cancelled") acc.cancelled += 1;
+    if (row.status === "draft") acc.draft += 1;
+    return acc;
+  }, emptySummary());
 
   return NextResponse.json({
     items: pagedRows.map((row) => ({
@@ -165,8 +207,8 @@ export async function GET(request: NextRequest) {
     pagination: {
       page,
       pageSize,
-      total: rows.length,
-      totalPages: Math.max(1, Math.ceil(rows.length / pageSize)),
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
     },
   });
 }

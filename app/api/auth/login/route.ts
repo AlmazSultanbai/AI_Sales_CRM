@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { AUTH_ACCESS_COOKIE, AUTH_COOKIE_MAX_AGE_SECONDS, AUTH_PROFILE_COOKIE, AUTH_REFRESH_COOKIE } from "@/lib/auth/session";
+import { AUTH_TICKET_COOKIE, AUTH_TICKET_TTL_SECONDS, createAuthTicket } from "@/lib/auth/ticket";
 import { supabaseAdmin } from "@/lib/supabase/admin-client";
 
 const loginSchema = z.object({
@@ -82,6 +83,22 @@ export async function POST(request: NextRequest) {
       maxAge: AUTH_COOKIE_MAX_AGE_SECONDS,
     }
   );
+
+  const ticket = await createAuthTicket({
+    user_id: data.user.id,
+    role: profile?.role ?? null,
+    company_id: profile?.company_id ?? null,
+  });
+
+  if (ticket) {
+    response.cookies.set(AUTH_TICKET_COOKIE, ticket, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: AUTH_TICKET_TTL_SECONDS,
+    });
+  }
 
   return response;
 }

@@ -5,6 +5,7 @@ import {
   AUTH_PROFILE_COOKIE,
   AUTH_REFRESH_COOKIE,
 } from "@/lib/auth/session";
+import { AUTH_TICKET_COOKIE, AUTH_TICKET_TTL_SECONDS, createAuthTicket, readAuthTicket } from "@/lib/auth/ticket";
 
 const PUBLIC_PATHS = ["/login"];
 const PROTECTED_PREFIXES = [
@@ -142,6 +143,23 @@ function writeAuthCookies(response: NextResponse, payload: { access_token: strin
   });
 }
 
+async function writeTicketCookie(response: NextResponse, profile: ProfilePayload) {
+  const ticket = await createAuthTicket({
+    user_id: profile.user_id,
+    role: profile.role,
+    company_id: profile.company_id,
+  });
+  if (!ticket) return;
+
+  response.cookies.set(AUTH_TICKET_COOKIE, ticket, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: AUTH_TICKET_TTL_SECONDS,
+  });
+}
+
 function writeProfileCookie(response: NextResponse, profile: ProfilePayload) {
   response.cookies.set(AUTH_PROFILE_COOKIE, JSON.stringify(profile), {
     httpOnly: true,
@@ -185,6 +203,17 @@ export async function middleware(request: NextRequest) {
 
   const isApi = isApiPath(pathname);
   let user: { id: string; email?: string | null } | null = null;
+
+  // Быстрый путь для всех запросов: подписанный билет проверяется локально,
+  // без обращения к Supabase. Живёт несколько минут, потом проверка повторяется.
+  const ticket = accessToken ? await readAuthTicket(request.cookies.get(AUTH_TICKET_COOKIE)?.value) : null;
+  if (ticket && !isPublicPath(pathname)) {
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-user-id", ticket.user_id);
+    if (ticket.role) requestHeaders.set("x-user-role", ticket.role);
+    if (ticket.company_id) requestHeaders.set("x-company-id", ticket.company_id);
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
 
   // Fast path for UI routes: avoid per-navigation Supabase network verification
   // and rely on signed JWT payload + profile cookie.
@@ -241,6 +270,7 @@ export async function middleware(request: NextRequest) {
     if (!profileFromCookie || profileFromCookie.user_id !== user.id) {
       writeProfileCookie(response, resolvedProfile);
     }
+    await writeTicketCookie(response, resolvedProfile);
     return response;
   }
 
@@ -258,6 +288,7 @@ export async function middleware(request: NextRequest) {
   if (!profileFromCookie || profileFromCookie.user_id !== user.id) {
     writeProfileCookie(response, resolvedProfile);
   }
+  await writeTicketCookie(response, resolvedProfile);
   return response;
 }
 

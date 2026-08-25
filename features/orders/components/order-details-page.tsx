@@ -531,7 +531,7 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
           const blockTotal = blockMaterialTotal + blockInstallationTotal;
           return (
             <Card key={block.id} className="border border-border">
-              <CardContent className="space-y-3 p-5">
+              <CardContent className="space-y-3 p-3 sm:p-5">
                 <div className="flex items-center justify-between">
                   <h3 className="text-2xl font-semibold text-ink">{block.title}</h3>
                   <Button variant="outline" size="icon" onClick={() => removeAddress(blockIndex)} disabled={!canEdit || blocks.length === 1}>
@@ -608,9 +608,9 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                       .sort((a, b) => (a.color_name ?? "").localeCompare(b.color_name ?? ""));
 
                     return (
-                      <div key={`${item.id ?? "new"}-${itemIndex}`} className="mb-2 grid gap-2 md:grid-cols-[2fr_1.8fr_0.8fr_auto]">
+                      <div key={`${item.id ?? "new"}-${itemIndex}`} className="mb-2 grid min-w-0 gap-2 md:grid-cols-[minmax(0,2fr)_minmax(0,1.8fr)_minmax(0,0.8fr)_auto]">
                         <select
-                          className="h-10 rounded-xl border border-border bg-white px-3 text-sm"
+                          className="h-10 w-full min-w-0 rounded-xl border border-border bg-white px-3 text-sm"
                           value={materialKey}
                           disabled={!canEdit}
                           onChange={(e) => {
@@ -659,7 +659,7 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                         </select>
 
                         <select
-                          className="h-10 rounded-xl border border-border bg-white px-3 text-sm text-ink"
+                          className="h-10 w-full min-w-0 rounded-xl border border-border bg-white px-3 text-sm text-ink"
                           value={item.collection_model_id ?? ""}
                           disabled={!canEdit || !selectedCollection}
                           onChange={(e) => {
@@ -696,36 +696,43 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                           ))}
                         </select>
 
-                        <Input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={item.quantity_m2 === 0 ? "" : item.quantity_m2}
-                          disabled={!canEdit}
-                          onChange={(e) => patchMaterial(blockIndex, itemIndex, { quantity_m2: toNumber(e.target.value) })}
-                        />
-
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-muted">{unitLabel(item.unit || selectedStock?.unit || "m2")}</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-rose-600"
-                            onClick={() => removeMaterial(blockIndex, itemIndex)}
-                            disabled={!canEdit || block.items.length === 1}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                        {/* Количество и единица — одним полем, чтобы край строки совпадал с остальными. */}
+                        <div className="relative min-w-0">
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            className="pr-14"
+                            placeholder="Количество"
+                            value={item.quantity_m2 === 0 ? "" : item.quantity_m2}
+                            disabled={!canEdit}
+                            onChange={(e) => patchMaterial(blockIndex, itemIndex, { quantity_m2: toNumber(e.target.value) })}
+                          />
+                          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">
+                            {unitLabel(item.unit || selectedStock?.unit || "m2")}
+                          </span>
                         </div>
+
+                        <Button
+                          variant="outline"
+                          className="w-full gap-1.5 text-rose-600 md:w-auto"
+                          onClick={() => removeMaterial(blockIndex, itemIndex)}
+                          disabled={!canEdit || block.items.length === 1}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          <span className="md:hidden">Удалить строку</span>
+                        </Button>
                       </div>
                     );
                   })}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Две кнопки добавления — равной ширины, чтобы строка не рвалась. */}
+                  <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:gap-3">
                   <Button
                     variant="outline"
-                    className="h-10 px-4"
+                    className="h-10 w-full px-4 sm:w-auto"
                     onClick={() => addMaterial(blockIndex)}
                     disabled={!canEdit}
                   >
@@ -735,7 +742,7 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                   <select
                     defaultValue=""
                     disabled={!canEdit}
-                    className="h-10 rounded-xl border border-border bg-white px-3 text-sm text-ink"
+                    className="h-10 w-full min-w-0 rounded-xl border border-border bg-white px-3 text-sm text-ink sm:w-auto"
                     onChange={(e) => {
                       const nextType = e.target.value as CatalogType;
                       if (!nextType) return;
@@ -750,6 +757,7 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                       </option>
                     ))}
                   </select>
+                  </div>
 
                   <label className="inline-flex items-center gap-2 text-sm text-ink">
                     <input
@@ -765,7 +773,7 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                     type="number"
                     min={0}
                     step="0.01"
-                    className="h-10 w-44"
+                    className="h-10 w-full sm:w-44"
                     placeholder="Сумма установки"
                     value={installationAmount === 0 ? "" : installationAmount}
                     disabled={!canEdit || !block.installation}
@@ -793,7 +801,7 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                         type="number"
                         min={0}
                         step="0.01"
-                        className="h-10 w-44"
+                        className="h-10 w-full sm:w-44"
                         placeholder="Сумма предоплаты"
                         value={block.advance_amount === 0 ? "" : block.advance_amount}
                         disabled={!canEdit || !block.advance_enabled}
@@ -837,7 +845,7 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                       type="number"
                       min={0}
                       step="0.01"
-                      className="h-10 w-44"
+                      className="h-10 w-full sm:w-44"
                       placeholder="Сумма продажи"
                       value={totalAmount === "" ? "" : totalAmount}
                       disabled={!canEdit || !manualTotalEnabled}
@@ -870,7 +878,10 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
           onClick={exportOrdersByPeriod}
         >
           <Download className="h-4 w-4" />
-          Выгрузка в Excel
+          <span className="whitespace-nowrap">
+            <span className="sm:hidden">Excel</span>
+            <span className="hidden sm:inline">Выгрузка в Excel</span>
+          </span>
         </Button>
         <Button variant="outline" className="min-w-[160px] flex-1 px-5 sm:flex-none" onClick={addAddress} disabled={!canEdit}>
           + Добавить заказ

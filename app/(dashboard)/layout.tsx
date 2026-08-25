@@ -15,7 +15,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // сама страница не двигается — поэтому нижняя панель стоит намертво.
   return (
     <div className="flex h-full flex-col overflow-hidden bg-bg">
-      <main className="min-w-0 flex-1 overflow-y-auto overscroll-contain p-3 pb-6 sm:p-4 lg:p-6 xl:p-7">
+      <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-3 pb-6 sm:p-4 lg:p-6 xl:p-7">
         <Topbar role={role} />
         <div className="crm-page">{children}</div>
       </main>

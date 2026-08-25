@@ -43,7 +43,7 @@ export function StoreListPanel({
 
       <div className="grid gap-2 sm:grid-cols-2">
         <select
-          className="h-10 rounded-xl border border-border bg-white px-3 text-sm text-slate-700 outline-none focus:border-slate-400"
+          className="h-10 w-full min-w-0 rounded-xl border border-border bg-white px-3 text-sm text-slate-700 outline-none focus:border-slate-400"
           value={filter}
           onChange={(event) => onFilterChange(event.target.value as StoreFilter)}
         >
@@ -54,7 +54,7 @@ export function StoreListPanel({
         </select>
 
         <select
-          className="h-10 rounded-xl border border-border bg-white px-3 text-sm text-slate-700 outline-none focus:border-slate-400"
+          className="h-10 w-full min-w-0 rounded-xl border border-border bg-white px-3 text-sm text-slate-700 outline-none focus:border-slate-400"
           value={sort}
           onChange={(event) => onSortChange(event.target.value as StoreSort)}
         >

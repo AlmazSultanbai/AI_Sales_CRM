@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FileSpreadsheet, Filter, History, PencilRuler, Plus, RefreshCw, Search, Truck } from "lucide-react";
+import { FileSpreadsheet, Filter, Grid2X2, History, PencilRuler, Plus, RefreshCw, Search, Truck } from "lucide-react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCollections } from "@/features/catalog/hooks/use-catalog-queries";
 import { useStockItems, useStockMutations } from "@/features/inventory/hooks/use-stock-queries";
@@ -128,6 +129,12 @@ export function InventoryPage() {
       </div>
 
       <div className="crm-chips">
+        <Link href="/catalog" className="shrink-0">
+          <Button size="sm" variant="secondary" className="gap-1.5 rounded-xl">
+            <Grid2X2 className="h-3.5 w-3.5" />
+            Каталог
+          </Button>
+        </Link>
         <Button
           size="sm"
           variant="secondary"

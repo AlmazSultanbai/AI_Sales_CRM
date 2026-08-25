@@ -103,7 +103,7 @@ export function MovementsPage() {
     <section className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="crm-title">Движения</h1>
+          <h1 className="crm-title">Отчёты</h1>
           <p className="crm-section-subtitle">
             {countWithWord(summary.total, ["операция", "операции", "операций"])} · приход {summary.incoming} · расход {summary.outgoing}
           </p>

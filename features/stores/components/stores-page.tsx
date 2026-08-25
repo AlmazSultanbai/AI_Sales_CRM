@@ -168,7 +168,7 @@ export function StoresPage() {
     <section className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="crm-title">Магазины</h1>
+          <h1 className="crm-title">Клиенты</h1>
           <p className="crm-section-subtitle">Всего: {stores.length}</p>
         </div>
 
@@ -181,7 +181,7 @@ export function StoresPage() {
           trigger={
             <Button className="shrink-0 gap-1.5 rounded-2xl px-4">
               <Plus className="h-4 w-4" />
-              Магазин
+              Клиент
             </Button>
           }
         />
@@ -209,13 +209,13 @@ export function StoresPage() {
         <div className="space-y-4">
           {storesLoading ? (
             <Card>
-              <CardContent className="p-8 text-center text-muted">Загрузка магазинов...</CardContent>
+              <CardContent className="p-8 text-center text-muted">Загрузка клиентов...</CardContent>
             </Card>
           ) : null}
 
           {!storesLoading && !activeStore ? (
             <Card>
-              <CardContent className="p-10 text-center text-muted">Выберите магазин из списка или создайте новый.</CardContent>
+              <CardContent className="p-10 text-center text-muted">Выберите клиента из списка или создайте нового.</CardContent>
             </Card>
           ) : null}
 
@@ -273,7 +273,7 @@ export function StoresPage() {
                       onClick={() => setActiveTab("debts")}
                     >
                       <ArrowUpRight className="h-3.5 w-3.5" />
-                      Все долги магазина
+                      Все долги клиента
                     </Button>
                     <Button
                       variant="secondary"
@@ -289,19 +289,19 @@ export function StoresPage() {
                       size="sm"
                       className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
                       onClick={async () => {
-                        const firstConfirm = window.confirm("Удалить магазин?");
+                        const firstConfirm = window.confirm("Удалить клиента?");
                         if (!firstConfirm) return;
-                        const secondConfirm = window.confirm("Вы точно хотите удалить этот магазин?");
+                        const secondConfirm = window.confirm("Вы точно хотите удалить этого клиента?");
                         if (!secondConfirm) return;
 
-                        const password = window.prompt("Введите пароль для подтверждения удаления магазина");
+                        const password = window.prompt("Введите пароль для подтверждения удаления клиента");
                         if (!password) return;
 
                         try {
                           await archiveStoreMutation.mutateAsync({ storeId: activeStore.id, password });
                           toast({
                             title: "Успешно сохранено",
-                            description: "Магазин удален",
+                            description: "Клиент удален",
                             variant: "success",
                             duration: 3000,
                           });
@@ -315,7 +315,7 @@ export function StoresPage() {
                         }
                       }}
                     >
-                      Удалить магазин
+                      Удалить клиента
                     </Button>
                   </div>
                 </CardContent>
@@ -369,8 +369,8 @@ export function StoresPage() {
                             onClick={() => {
                               if (!activeStore?.name) {
                                 toast({
-                                  title: "Выберите магазин",
-                                  description: "Сначала выберите магазин для выгрузки",
+                                  title: "Выберите клиента",
+                                  description: "Сначала выберите клиента для выгрузки",
                                   variant: "error",
                                   duration: 3000,
                                 });
@@ -497,7 +497,7 @@ export function StoresPage() {
 
                       {!openDebts.length ? (
                         <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-emerald-700">
-                          У магазина нет открытых долгов
+                          У клиента нет открытых долгов
                         </div>
                       ) : null}
                     </TabsContent>

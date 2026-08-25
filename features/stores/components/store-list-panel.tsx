@@ -35,7 +35,7 @@ export function StoreListPanel({
         <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
         <input
           className="crm-search"
-          placeholder="Поиск: название, телефон, адрес..."
+          placeholder="Поиск: имя, телефон, адрес..."
           value={searchValue}
           onChange={(event) => onSearchValueChange(event.target.value)}
         />
@@ -47,7 +47,7 @@ export function StoreListPanel({
           value={filter}
           onChange={(event) => onFilterChange(event.target.value as StoreFilter)}
         >
-          <option value="all">Все магазины</option>
+          <option value="all">Все клиенты</option>
           <option value="with_debt">С долгом</option>
           <option value="without_debt">Без долга</option>
           <option value="inactive">Неактивные</option>
@@ -118,7 +118,7 @@ export function StoreListPanel({
         ) : (
           <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted">
             <CircleAlert className="mx-auto mb-2 h-5 w-5 text-slate-400" />
-            Магазины не найдены
+            Клиенты не найдены
           </div>
         )}
       </div>

@@ -5,7 +5,7 @@ import { FileSpreadsheet, Filter, Grid2X2, History, PencilRuler, Plus, RefreshCw
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCollections } from "@/features/catalog/hooks/use-catalog-queries";
-import { useStockItems, useStockMutations } from "@/features/inventory/hooks/use-stock-queries";
+import { useStockItemByCode, useStockItems, useStockMutations } from "@/features/inventory/hooks/use-stock-queries";
 import { StockTable } from "@/features/inventory/components/stock-table";
 import { StockHistoryDialog } from "@/features/inventory/components/stock-history-dialog";
 import { StockMovementDrawer } from "@/features/inventory/components/stock-movement-drawer";
@@ -60,6 +60,10 @@ export function InventoryPage() {
       description: "Остаток обновлен",
     },
   };
+
+  const scannedCode = searchParams.get("item") ?? "";
+  const { data: scannedResult, isLoading: scannedLoading } = useStockItemByCode(scannedCode || undefined);
+  const scannedItem = scannedResult?.item ?? null;
 
   useEffect(() => {
     const collection = searchParams.get("collectionId") ?? "";
@@ -298,6 +302,36 @@ export function InventoryPage() {
         <Card>
           <CardContent className="p-6 text-sm text-rose-600">{error.message}</CardContent>
         </Card>
+      ) : null}
+
+      {scannedCode ? (
+        <div className="space-y-2.5 rounded-2xl border-2 border-emerald-600/40 bg-emerald-50/50 p-2.5">
+          <div className="flex items-center justify-between gap-2 px-1">
+            <p className="text-[13px] font-semibold text-emerald-800">Найдено сканером</p>
+            <Link href="/stocks" className="text-[13px] font-medium text-emerald-800 underline">
+              Весь склад
+            </Link>
+          </div>
+
+          {scannedLoading ? (
+            <p className="px-1 pb-1 text-sm text-muted">Загрузка позиции...</p>
+          ) : scannedItem ? (
+            <StockTable
+              items={[scannedItem]}
+              onOpenHistory={(item) => {
+                setSelectedItemId(item.id);
+                setHistoryOpen(true);
+              }}
+              onOpenDetails={(item) => {
+                setSelectedItemId(item.id);
+                setActiveMovementType("incoming");
+                setDrawerOpen(true);
+              }}
+            />
+          ) : (
+            <p className="px-1 pb-1 text-sm text-muted">Позиция по коду не найдена.</p>
+          )}
+        </div>
       ) : null}
 
       <StockTable

@@ -114,3 +114,15 @@ export async function createStockMovement(payload: CreateStockMovementInput) {
   });
   return safeJson<{ movement: StockMovement; stock_item: StockItem }>(response);
 }
+
+export type StockLookupResponse = {
+  item: StockListItem | null;
+  matchedBy: "qr" | "barcode" | "model" | null;
+  barcodeUnavailable?: boolean;
+};
+
+/** Поиск позиции по отсканированному коду или по id из QR. */
+export async function lookupStockByCode(code: string): Promise<StockLookupResponse> {
+  const response = await fetch(`/api/stocks/lookup?code=${encodeURIComponent(code)}`);
+  return safeJson<StockLookupResponse>(response);
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createStockMovement, fetchStockItems, fetchStockMovements } from "@/features/inventory/lib/stock-api";
+import { createStockMovement, fetchStockItems, fetchStockMovements, lookupStockByCode } from "@/features/inventory/lib/stock-api";
 import { CreateStockMovementInput } from "@/features/inventory/lib/schemas";
 
 export function useStockItems(filters: {
@@ -19,6 +19,16 @@ export function useStockItems(filters: {
     queryKey: ["stock-items", filters],
     queryFn: () => fetchStockItems(filters),
     placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+}
+
+/** Позиция, найденная сканером: код приходит из адреса страницы. */
+export function useStockItemByCode(code?: string) {
+  return useQuery({
+    queryKey: ["stock-item-by-code", code],
+    queryFn: () => lookupStockByCode(code!),
+    enabled: Boolean(code),
     staleTime: 30_000,
   });
 }

@@ -11,6 +11,13 @@
     @apply border-border;
   }
 
+  /* Высота на всю страницу: каркас дашборда занимает экран целиком,
+     скроллится только контент, поэтому нижняя панель никуда не уезжает. */
+  html,
+  body {
+    height: 100%;
+  }
+
   body {
     @apply bg-bg text-ink antialiased;
     background-image: radial-gradient(circle at 20% -15%, rgba(42, 67, 104, 0.08), transparent 35%),

@@ -11,12 +11,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const headerList = await headers();
   const role = resolveRole(headerList.get("x-user-role"));
 
+  // Каркас на всю высоту экрана: скроллится только содержимое,
+  // сама страница не двигается — поэтому нижняя панель стоит намертво.
   return (
-    <div className="min-h-screen bg-bg">
-      <main className="min-h-screen w-full min-w-0 p-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:p-4 sm:pb-[calc(5.75rem+env(safe-area-inset-bottom))] lg:p-6 lg:pb-[calc(6rem+env(safe-area-inset-bottom))] xl:p-7 xl:pb-[calc(6rem+env(safe-area-inset-bottom))]">
+    <div className="flex h-full flex-col overflow-hidden bg-bg">
+      <main className="min-w-0 flex-1 overflow-y-auto overscroll-contain p-3 pb-6 sm:p-4 lg:p-6 xl:p-7">
         <Topbar role={role} />
         <div className="crm-page">{children}</div>
       </main>
+
       <BottomNav role={role} />
     </div>
   );

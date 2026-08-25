@@ -11,8 +11,10 @@ export function BottomNav({ role }: { role: UserRole }) {
   const pathname = usePathname();
   const items = navigationItems.filter((item) => can(role, item.permission));
 
+  // Панель — обычный элемент внизу колонки, а не fixed: так она не «плавает»
+  // при скролле и сворачивании адресной строки на телефоне.
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-white pb-[max(env(safe-area-inset-bottom),0.35rem)] pt-2 shadow-[0_-4px_18px_rgba(15,23,42,0.10)]">
+    <nav className="z-40 shrink-0 border-t border-border bg-white pb-[max(env(safe-area-inset-bottom),0.35rem)] pt-2 shadow-[0_-4px_18px_rgba(15,23,42,0.10)]">
       <div
         className="mx-auto grid w-full max-w-2xl gap-0.5 px-1 sm:gap-2 sm:px-4"
         style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}

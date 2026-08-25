@@ -29,6 +29,7 @@ async function loadOrder(companyId: string, orderId: string) {
     order_number: string;
     status: "draft" | "confirmed" | "completed" | "cancelled";
     stock_applied: boolean;
+    total_amount: number;
     paid_amount: number;
     debt_amount: number;
     payment_status: "unpaid" | "partial" | "paid";
@@ -75,8 +76,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     .eq("linked_order_id", id)
     .order("created_at", { ascending: false });
 
+  // Долг выводим из суммы и оплат: в базе он у части заказов не пересчитан.
+  const paidAmount = Number(order.paid_amount ?? 0);
+  const totalAmount = Number(order.total_amount ?? 0);
+
   return NextResponse.json({
     ...order,
+    debt_amount: Math.max(totalAmount - paidAmount, 0),
     movements: movements ?? [],
   });
 }

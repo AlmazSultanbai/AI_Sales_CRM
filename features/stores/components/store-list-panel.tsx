@@ -1,10 +1,9 @@
 "use client";
 
-import { ArrowDown, CheckCircle2, CircleAlert, Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { ChevronRight, CircleAlert, MapPin, Phone, Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Store } from "@/types/domain";
-import { formatCurrency, storeDebtIndicator } from "@/features/stores/lib/view-utils";
+import { formatCurrency } from "@/features/stores/lib/view-utils";
 
 type StoreFilter = "all" | "with_debt" | "without_debt" | "inactive";
 type StoreSort = "name" | "debt" | "activity";
@@ -31,45 +30,41 @@ export function StoreListPanel({
   onSelectStore: (storeId: string) => void;
 }) {
   return (
-    <aside className="flex max-h-[28rem] flex-col rounded-2xl border border-border bg-white xl:h-[calc(100vh-10.5rem)] xl:max-h-none">
-      <div className="space-y-3 border-b border-border p-4">
-        <p className="text-sm font-semibold text-ink">Магазины</p>
-
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            className="pl-9"
-            placeholder="Поиск магазина..."
-            value={searchValue}
-            onChange={(event) => onSearchValueChange(event.target.value)}
-          />
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-          <select
-            className="h-10 rounded-xl border border-border bg-white px-3 text-sm text-slate-700 outline-none focus:border-slate-400"
-            value={filter}
-            onChange={(event) => onFilterChange(event.target.value as StoreFilter)}
-          >
-            <option value="all">Все магазины</option>
-            <option value="with_debt">С долгом</option>
-            <option value="without_debt">Без долга</option>
-            <option value="inactive">Неактивные</option>
-          </select>
-
-          <select
-            className="h-10 rounded-xl border border-border bg-white px-3 text-sm text-slate-700 outline-none focus:border-slate-400"
-            value={sort}
-            onChange={(event) => onSortChange(event.target.value as StoreSort)}
-          >
-            <option value="name">Сортировка: по названию</option>
-            <option value="debt">Сортировка: по долгу</option>
-            <option value="activity">Сортировка: по активности</option>
-          </select>
-        </div>
+    <div className="space-y-3">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+        <input
+          className="crm-search"
+          placeholder="Поиск: название, телефон, адрес..."
+          value={searchValue}
+          onChange={(event) => onSearchValueChange(event.target.value)}
+        />
       </div>
 
-      <div className="flex-1 space-y-2 overflow-y-auto p-3">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <select
+          className="h-10 rounded-xl border border-border bg-white px-3 text-sm text-slate-700 outline-none focus:border-slate-400"
+          value={filter}
+          onChange={(event) => onFilterChange(event.target.value as StoreFilter)}
+        >
+          <option value="all">Все магазины</option>
+          <option value="with_debt">С долгом</option>
+          <option value="without_debt">Без долга</option>
+          <option value="inactive">Неактивные</option>
+        </select>
+
+        <select
+          className="h-10 rounded-xl border border-border bg-white px-3 text-sm text-slate-700 outline-none focus:border-slate-400"
+          value={sort}
+          onChange={(event) => onSortChange(event.target.value as StoreSort)}
+        >
+          <option value="name">Сортировка: по названию</option>
+          <option value="debt">Сортировка: по долгу</option>
+          <option value="activity">Сортировка: по активности</option>
+        </select>
+      </div>
+
+      <div className="max-h-[26rem] space-y-2.5 overflow-y-auto pr-0.5">
         {stores.length ? (
           stores.map((store) => {
             const debt = Number(store.current_debt_sum ?? store.debt_balance ?? 0);
@@ -78,52 +73,55 @@ export function StoreListPanel({
             return (
               <button
                 key={store.id}
-                className={cn(
-                  "w-full rounded-xl border p-3 text-left transition",
-                  active
-                    ? "border-accent bg-accent text-white"
-                    : "border-border bg-slate-50 text-slate-900 hover:bg-slate-100"
-                )}
+                type="button"
                 onClick={() => onSelectStore(store.id)}
+                className={cn(
+                  "crm-row crm-row-link flex w-full items-center gap-3 text-left",
+                  active ? "border-accent ring-1 ring-accent/25" : ""
+                )}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{store.name}</p>
-                    <p className={cn("mt-1 truncate text-xs", active ? "text-slate-300" : "text-muted")}>
-                      {store.contact_person || "Без контакта"}
-                    </p>
-                  </div>
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                  <User className="h-5 w-5" />
+                </span>
 
-                  <span className={cn("mt-1 h-2.5 w-2.5 rounded-full", storeDebtIndicator(debt))} />
-                </div>
+                <span className="min-w-0 flex-1">
+                  <span className="crm-row-title block truncate">{store.name}</span>
 
-                <div className="mt-3 flex items-center justify-between">
-                  {debt > 0 ? (
-                    <span className={cn("text-xs font-medium", active ? "text-rose-300" : "text-rose-600")}>
-                      -{formatCurrency(debt)}
+                  {store.phone ? (
+                    <span className="crm-row-sub flex items-center gap-1.5 truncate">
+                      <Phone className="h-3.5 w-3.5 shrink-0" />
+                      {store.phone}
                     </span>
-                  ) : (
-                    <span className={cn("inline-flex items-center gap-1 text-xs", active ? "text-emerald-300" : "text-emerald-700")}>
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      0
-                    </span>
-                  )}
+                  ) : null}
 
-                  <span className={cn("inline-flex items-center gap-1 text-xs", active ? "text-slate-300" : "text-slate-500")}>
-                    <ArrowDown className="h-3.5 w-3.5 rotate-45" />
-                    {store.is_active === false ? "Неактивный" : "Активный"}
+                  {store.address ? (
+                    <span className="crm-row-sub flex items-center gap-1.5 truncate">
+                      <MapPin className="h-3.5 w-3.5 shrink-0" />
+                      {store.address}
+                    </span>
+                  ) : null}
+
+                  <span className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {debt > 0 ? (
+                      <span className="crm-pill bg-rose-50 text-rose-700">Долг {formatCurrency(debt)}</span>
+                    ) : (
+                      <span className="crm-pill bg-emerald-50 text-emerald-700">Без долга</span>
+                    )}
+                    {store.is_active === false ? <span className="crm-pill crm-pill-soft">Неактивный</span> : null}
                   </span>
-                </div>
+                </span>
+
+                <ChevronRight className="h-5 w-5 shrink-0 text-slate-300" />
               </button>
             );
           })
         ) : (
-          <div className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted">
+          <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted">
             <CircleAlert className="mx-auto mb-2 h-5 w-5 text-slate-400" />
             Магазины не найдены
           </div>
         )}
       </div>
-    </aside>
+    </div>
   );
 }

@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin-client";
 import { getCompanyIdFromRequest, getRoleFromRequest } from "@/lib/auth/request-context";
 import { can } from "@/lib/auth/rbac";
 import { updateStoreSchema } from "@/features/stores/lib/schemas";
+import { applyStoreTotals, loadStoreTotalsIndex, pickStoreTotals } from "@/lib/supabase/store-orders-summary";
 
 export async function GET(
   request: NextRequest,
@@ -24,7 +25,15 @@ export async function GET(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  try {
+    const totalsIndex = await loadStoreTotalsIndex(companyId);
+    return NextResponse.json(applyStoreTotals(data, pickStoreTotals(totalsIndex, data)));
+  } catch (totalsError) {
+    return NextResponse.json(
+      { error: totalsError instanceof Error ? totalsError.message : "Не удалось посчитать долг магазина" },
+      { status: 500 }
+    );
+  }
 }
 
 export async function PATCH(

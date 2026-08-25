@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FileSpreadsheet, Filter, History, PencilRuler, Plus, RefreshCw, Truck } from "lucide-react";
+import { FileSpreadsheet, Filter, History, PencilRuler, Plus, RefreshCw, Search, Truck } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useCollections } from "@/features/catalog/hooks/use-catalog-queries";
 import { useStockItems, useStockMutations } from "@/features/inventory/hooks/use-stock-queries";
@@ -15,6 +15,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToaster } from "@/components/ui/toaster";
 import { MovementType } from "@/types/domain";
+import { countWithWord } from "@/lib/format";
 
 export function InventoryPage() {
   const searchParams = useSearchParams();
@@ -91,100 +92,121 @@ export function InventoryPage() {
   const selectedModels = selectedCollection?.collection_models ?? [];
 
   return (
-    <section className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-ink sm:text-3xl">Склад</h1>
-        <p className="mt-2 text-sm text-muted">Учет остатков и движение товаров на складе.</p>
+    <section className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="crm-title">Склад</h1>
+          <p className="crm-section-subtitle">
+            {countWithWord(summary.totalItems, ["позиция", "позиции", "позиций"])} · остаток {formatStockQuantity(summary.totalQuantity)}
+            <span className="hidden sm:inline"> · на {formatSom(summary.totalAmount)}</span>
+          </p>
+        </div>
+
+        <Button
+          className="shrink-0 gap-1.5 rounded-2xl px-4"
+          onClick={() => {
+            setActiveMovementType("incoming");
+            setDrawerOpen(true);
+          }}
+        >
+          <Plus className="h-4 w-4" />
+          Приход
+        </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <Card>
-          <CardContent className="space-y-1 p-3 sm:p-5">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-400 sm:text-xs">Всего товаров</p>
-            <p className="text-2xl font-bold text-ink sm:text-3xl">{summary.totalItems}</p>
-            <p className="text-xs text-muted">позиции</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="space-y-1 p-3 sm:p-5">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-400 sm:text-xs">Общее количество</p>
-            <p className="break-words text-2xl font-bold text-ink sm:text-3xl">{formatStockQuantity(summary.totalQuantity)}</p>
-            <p className="text-xs text-muted">по всем единицам</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="space-y-1 p-3 sm:p-5">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-400 sm:text-xs">На сумму</p>
-            <p className="break-words text-xl font-bold text-ink sm:text-3xl">{formatSom(summary.totalAmount)}</p>
-            <p className="text-xs text-muted">по закупочным ценам</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="space-y-1 p-3 sm:p-5">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-400 sm:text-xs">Низкий остаток</p>
-            <p className="text-2xl font-bold text-rose-600 sm:text-3xl">{summary.lowStockItems}</p>
-            <p className="text-xs text-muted">товаров</p>
-          </CardContent>
-        </Card>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+        <input
+          className="crm-search"
+          placeholder="Поиск: материал, модель, цвет..."
+          value={search}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage(1);
+          }}
+        />
       </div>
 
-      <Card>
-        <CardContent className="space-y-3 p-3 sm:p-4">
-          <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-              <Button className="gap-1.5" onClick={() => { setActiveMovementType("incoming"); setDrawerOpen(true); }}>
-                <Plus className="h-4 w-4" />
-                Приход
-              </Button>
-              <Button variant="secondary" className="gap-1.5" onClick={() => { setActiveMovementType("outgoing"); setDrawerOpen(true); }}>
-                <Truck className="h-4 w-4" />
-                Расход
-              </Button>
-              <Button variant="secondary" className="gap-1.5" onClick={() => { setActiveMovementType("transfer"); setDrawerOpen(true); }}>
-                <RefreshCw className="h-4 w-4" />
-                Перемещение
-              </Button>
-              <Button variant="secondary" className="gap-1.5" onClick={() => { setActiveMovementType("adjustment"); setDrawerOpen(true); }}>
-                <PencilRuler className="h-4 w-4" />
-                Корректировка
-              </Button>
-              <Button variant="outline" className="gap-1.5" onClick={() => setHistoryOpen(true)}>
-                <History className="h-4 w-4" />
-                <span className="truncate">
-                  История<span className="hidden sm:inline"> движений</span>
-                </span>
-              </Button>
+      <div className="crm-chips">
+        <Button
+          size="sm"
+          variant="secondary"
+          className="shrink-0 gap-1.5 rounded-xl"
+          onClick={() => {
+            setActiveMovementType("outgoing");
+            setDrawerOpen(true);
+          }}
+        >
+          <Truck className="h-3.5 w-3.5" />
+          Расход
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="shrink-0 gap-1.5 rounded-xl"
+          onClick={() => {
+            setActiveMovementType("transfer");
+            setDrawerOpen(true);
+          }}
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          Перемещение
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="shrink-0 gap-1.5 rounded-xl"
+          onClick={() => {
+            setActiveMovementType("adjustment");
+            setDrawerOpen(true);
+          }}
+        >
+          <PencilRuler className="h-3.5 w-3.5" />
+          Корректировка
+        </Button>
+        <Button size="sm" variant="outline" className="shrink-0 gap-1.5 rounded-xl" onClick={() => setHistoryOpen(true)}>
+          <History className="h-3.5 w-3.5" />
+          История
+        </Button>
 
-              <ExportDialog
-                defaultSection="stocks"
-                trigger={
-                  <Button variant="outline" className="w-full gap-1.5 sm:w-auto">
-                    <FileSpreadsheet className="h-4 w-4" />
-                    Выгрузка
-                  </Button>
-                }
-              />
-            </div>
+        <ExportDialog
+          defaultSection="stocks"
+          trigger={
+            <Button size="sm" variant="outline" className="shrink-0 gap-1.5 rounded-xl">
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              Выгрузка
+            </Button>
+          }
+        />
 
-            <div className="flex w-full flex-col gap-2 sm:flex-row 2xl:w-auto">
-              <Input
-                className="sm:w-64"
-                placeholder="Поиск по складу..."
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value);
-                  setPage(1);
-                }}
-              />
-              <Button variant="outline" className="gap-1.5" onClick={() => setShowFilters((value) => !value)}>
-                <Filter className="h-4 w-4" />
-                Фильтр
-              </Button>
-            </div>
-          </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0 gap-1.5 rounded-xl"
+          onClick={() => setShowFilters((value) => !value)}
+        >
+          <Filter className="h-3.5 w-3.5" />
+          Фильтр
+        </Button>
+      </div>
 
+      <div className="grid grid-cols-2 gap-2.5">
+        <div className="crm-row">
+          <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Низкий остаток</p>
+          <p className="mt-1 text-2xl font-bold leading-none text-rose-600">{summary.lowStockItems}</p>
+          <p className="mt-1 text-xs text-muted">товаров</p>
+        </div>
+        <div className="crm-row">
+          <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Всего позиций</p>
+          <p className="mt-1 text-2xl font-bold leading-none text-ink">{summary.totalItems}</p>
+          <p className="mt-1 text-xs text-muted">на складе</p>
+        </div>
+      </div>
+
+      <Card className={showFilters ? "" : "hidden"}>
+        <CardContent className="p-3 sm:p-4">
           {showFilters ? (
-            <div className="grid gap-2 rounded-xl border border-border bg-slate-50 p-3 sm:grid-cols-2 xl:grid-cols-6">
+            <div className="grid gap-2 sm:grid-cols-2">
               <Input
                 placeholder="Материал"
                 value={materialFilter}
@@ -285,51 +307,39 @@ export function InventoryPage() {
         }}
       />
 
-      <Card>
-        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <p className="text-sm text-muted">
-            Показано {(pagination.page - 1) * pagination.pageSize + 1}–{Math.min(pagination.page * pagination.pageSize, pagination.total)} из {pagination.total}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled={pagination.page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
-              Назад
-            </Button>
-            <span className="text-xs text-muted">
-              {pagination.page} / {pagination.totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pagination.page >= pagination.totalPages}
-              onClick={() => setPage((value) => value + 1)}
-            >
-              Вперед
-            </Button>
-            <select
-              className="h-8 rounded-lg border border-border bg-white px-2 text-xs"
-              value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value));
-                setPage(1);
-              }}
-            >
-              <option value={8}>8</option>
-              <option value={12}>12</option>
-              <option value={20}>20</option>
-            </select>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-sky-100 bg-sky-50/40">
-        <CardContent className="space-y-2 p-5">
-          <p className="text-sm font-semibold text-sky-900">Важно</p>
-          <p className="text-sm text-sky-800">
-            Остатки на складе изменяются только через движения товара: приход, расход, перемещение, корректировка.
-            Прямое редактирование остатков запрещено.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+        <p className="text-sm text-muted">
+          Показано {(pagination.page - 1) * pagination.pageSize + 1}–{Math.min(pagination.page * pagination.pageSize, pagination.total)} из {pagination.total}
+        </p>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" disabled={pagination.page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+            Назад
+          </Button>
+          <span className="text-xs text-muted">
+            {pagination.page} / {pagination.totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pagination.page >= pagination.totalPages}
+            onClick={() => setPage((value) => value + 1)}
+          >
+            Вперед
+          </Button>
+          <select
+            className="h-8 rounded-lg border border-border bg-white px-2 text-xs"
+            value={pageSize}
+            onChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setPage(1);
+            }}
+          >
+            <option value={8}>8</option>
+            <option value={12}>12</option>
+            <option value={20}>20</option>
+          </select>
+        </div>
+      </div>
 
       <StockMovementDrawer
         open={drawerOpen}

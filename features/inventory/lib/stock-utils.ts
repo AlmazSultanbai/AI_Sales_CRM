@@ -1,4 +1,5 @@
 import { MovementType, StockItem } from "@/types/domain";
+import { formatMoney, formatQuantity } from "@/lib/format";
 
 export function movementTypeLabel(type: MovementType) {
   if (type === "incoming") return "Приход";
@@ -18,11 +19,11 @@ export function stockStatusClass(item: StockItem) {
 }
 
 export function formatStockQuantity(value: number) {
-  return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(value);
+  return formatQuantity(value);
 }
 
 export function formatSom(value: number) {
-  return `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(value)} сом`;
+  return formatMoney(value);
 }
 
 export function generateSku(material: string, model: string, color: string) {

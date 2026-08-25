@@ -1,4 +1,5 @@
 import { OrderPaymentStatus, OrderStatus } from "@/types/domain";
+import { formatMoney } from "@/lib/format";
 
 export function orderStatusMeta(status: OrderStatus) {
   switch (status) {
@@ -30,7 +31,7 @@ export function orderPaymentStatusMeta(status: OrderPaymentStatus, paidAmount = 
 }
 
 export function formatCurrency(value: number) {
-  return `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(value)} с`;
+  return formatMoney(value);
 }
 
 export function formatPercent(value: number) {

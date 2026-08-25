@@ -165,11 +165,11 @@ export function StoresPage() {
   }, [activeStore?.name, orderDateFrom, orderDateTo]);
 
   return (
-    <section className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink sm:text-3xl">Магазины</h1>
-          <p className="mt-2 text-sm text-muted">Учет закупок, оплат и долгов по каждому магазину</p>
+    <section className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="crm-title">Магазины</h1>
+          <p className="crm-section-subtitle">Всего: {stores.length}</p>
         </div>
 
         <StoreFormDialog
@@ -179,7 +179,7 @@ export function StoresPage() {
           }}
           disabled={isPending}
           trigger={
-            <Button className="gap-2">
+            <Button className="shrink-0 gap-1.5 rounded-2xl px-4">
               <Plus className="h-4 w-4" />
               Магазин
             </Button>
@@ -193,7 +193,7 @@ export function StoresPage() {
         </Card>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="space-y-4">
         <StoreListPanel
           stores={stores}
           selectedStoreId={selectedStoreId}

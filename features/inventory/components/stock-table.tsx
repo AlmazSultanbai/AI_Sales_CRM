@@ -2,19 +2,27 @@
 
 import { History, Pencil } from "lucide-react";
 import { ProductThumb } from "@/features/media/components/product-thumb";
-import { movementTypeLabel, stockStatusClass, formatSom, formatStockQuantity } from "@/features/inventory/lib/stock-utils";
+import { movementTypeLabel, formatSom, formatStockQuantity } from "@/features/inventory/lib/stock-utils";
 import { StockListItem } from "@/features/inventory/lib/stock-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { unitLabel } from "@/lib/units";
+import { cn } from "@/lib/utils";
 
-function movementContext(item: StockListItem) {
+function stockPillClass(quantity: number, threshold: number) {
+  if (quantity <= 0) return "crm-pill crm-pill-red";
+  if (quantity <= threshold) return "crm-pill crm-pill-amber";
+  return "crm-pill crm-pill-green";
+}
+
+function lastMovementText(item: StockListItem) {
   const movement = item.lastMovement;
-  if (!movement) return "—";
-  if (movement.supplier_name) return `Поставщик: ${movement.supplier_name}`;
-  if (movement.source_store_id) return `Источник: ${movement.source_store_id.slice(0, 8)}`;
-  if (movement.destination_store_id) return `Назначение: ${movement.destination_store_id.slice(0, 8)}`;
-  return "Без комментария";
+  if (!movement) return "Движений пока не было";
+
+  const date = new Date(movement.created_at).toLocaleDateString("ru-RU");
+  const type = movementTypeLabel(movement.movement_type as never);
+  const source = movement.supplier_name ? ` · ${movement.supplier_name}` : "";
+  return `${date} · ${type}${source}`;
 }
 
 export function StockTable({
@@ -45,71 +53,66 @@ export function StockTable({
   }
 
   return (
-    <Card>
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-sm">
-            <thead className="border-b border-border bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-2 py-3 text-left font-semibold">Фото</th>
-                <th className="px-2 py-3 text-left font-semibold">Материал</th>
-                <th className="hidden px-2 py-3 text-left font-semibold 2xl:table-cell">Коллекция</th>
-                <th className="px-2 py-3 text-left font-semibold">Модель</th>
-                <th className="hidden px-2 py-3 text-left font-semibold xl:table-cell">Цвет</th>
-                <th className="px-2 py-3 text-left font-semibold">Себест.</th>
-                <th className="hidden px-2 py-3 text-left font-semibold lg:table-cell">Продажа</th>
-                <th className="px-2 py-3 text-left font-semibold">Остаток</th>
-                <th className="px-2 py-3 text-left font-semibold">Последнее движение</th>
-                <th className="px-2 py-3 text-left font-semibold">Действия</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {items.map((item) => (
-                <tr key={item.id} className="transition hover:bg-slate-50/70">
-                  <td className="px-2 py-2.5">
-                    <ProductThumb
-                      src={item.photo_url ?? item.collection_models?.image_url ?? null}
-                      alt={item.material_name ?? item.collections?.name ?? "Товар"}
-                      className="h-9 w-9 rounded-lg"
-                    />
-                  </td>
-                  <td className="px-2 py-2.5 font-semibold text-ink">{item.material_name ?? item.collections?.name ?? "—"}</td>
-                  <td className="hidden px-2 py-2.5 text-slate-600 2xl:table-cell">{item.collections?.name ?? "—"}</td>
-                  <td className="px-2 py-2.5 text-slate-700">{item.model_code ?? item.collection_models?.model_code ?? "—"}</td>
-                  <td className="hidden px-2 py-2.5 text-slate-700 xl:table-cell">{item.color_name ?? item.collection_models?.color_name ?? "—"}</td>
-                  <td className="px-2 py-2.5 font-medium text-slate-700">
-                    {item.purchase_price_per_m2 == null ? "—" : formatSom(Number(item.purchase_price_per_m2))}
-                  </td>
-                  <td className="hidden px-2 py-2.5 font-medium text-slate-700 lg:table-cell">
-                    {item.sale_price_per_m2 == null ? "—" : formatSom(Number(item.sale_price_per_m2))}
-                  </td>
-                  <td className={`px-2 py-2.5 text-base font-bold ${stockStatusClass(item)}`}>
-                    {formatStockQuantity(Number(item.quantity_m2 ?? item.quantity ?? 0))} {unitLabel(item.unit)}
-                  </td>
-                  <td className="px-2 py-2.5 text-xs text-slate-600">
-                    <p>
-                      {item.lastMovement
-                        ? `${new Date(item.lastMovement.created_at).toLocaleDateString("ru-RU")} · ${movementTypeLabel(item.lastMovement.movement_type as never)}`
-                        : "—"}
-                    </p>
-                    <p className="mt-0.5 hidden text-[11px] text-slate-500 2xl:block">{movementContext(item)}</p>
-                  </td>
-                  <td className="px-2 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <Button size="icon" variant="outline" onClick={() => onOpenHistory(item)} aria-label="История позиции">
-                        <History className="h-4 w-4" />
-                      </Button>
-                      <Button size="icon" variant="outline" onClick={() => onOpenDetails(item)} aria-label="Детали позиции">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-2.5">
+      {items.map((item) => {
+        const quantity = Number(item.quantity_m2 ?? item.quantity ?? 0);
+        const threshold = Number(item.low_stock_threshold ?? 10);
+        const unit = unitLabel(item.unit);
+        const title = item.material_name ?? item.collections?.name ?? "Товар";
+        const model = item.model_code ?? item.collection_models?.model_code ?? null;
+        const color = item.color_name ?? item.collection_models?.color_name ?? null;
+        const collection = item.collections?.name ?? null;
+        const salePrice = item.sale_price_per_m2 == null ? null : Number(item.sale_price_per_m2);
+        const purchasePrice = item.purchase_price_per_m2 == null ? null : Number(item.purchase_price_per_m2);
+
+        const subtitle = [collection, model, color].filter(Boolean).join(" · ") || "Без характеристик";
+
+        return (
+          <div key={item.id} className="crm-row crm-row-link">
+            <div className="flex items-start gap-3">
+              <ProductThumb
+                src={item.photo_url ?? item.collection_models?.image_url ?? null}
+                alt={title}
+                className="h-12 w-12 shrink-0 rounded-xl sm:h-14 sm:w-14"
+              />
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="crm-row-title truncate">{title}</p>
+                    <p className="crm-row-sub truncate">{subtitle}</p>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="crm-row-amount">{salePrice == null ? "0 с" : formatSom(salePrice)}</p>
+                    {purchasePrice == null ? null : (
+                      <p className="crm-row-amount-sub">закуп {formatSom(purchasePrice)}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className={cn(stockPillClass(quantity, threshold))}>
+                    {quantity <= 0 ? "Нет остатка" : `${formatStockQuantity(quantity)} ${unit}`}
+                  </span>
+                  <span className="crm-pill crm-pill-soft">{lastMovementText(item)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-2.5 flex items-center justify-end gap-2 border-t border-border pt-2.5">
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onOpenHistory(item)}>
+                <History className="h-3.5 w-3.5" />
+                История
+              </Button>
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onOpenDetails(item)}>
+                <Pencil className="h-3.5 w-3.5" />
+                Движение
+              </Button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }

@@ -23,6 +23,11 @@ function qs(params: Record<string, string | number | boolean | undefined>) {
   return urlParams.toString();
 }
 
+/** items из ответа приводим к массиву — страница не должна падать на неожиданной форме. */
+function withSafeItems<T extends { items?: unknown }>(payload: T): T {
+  return Array.isArray(payload?.items) ? payload : ({ ...payload, items: [] } as T);
+}
+
 async function safeJson<T>(response: Response): Promise<T> {
   const data = await response.json();
   if (!response.ok) {
@@ -79,7 +84,7 @@ export async function fetchStockItems(filters: StockFilters): Promise<StockListR
     ...filters,
     low_stock: filters.low_stock ? "true" : undefined,
   })}`);
-  return safeJson<StockListResponse>(response);
+  return withSafeItems(await safeJson<StockListResponse>(response));
 }
 
 export async function fetchStockMovements(filters: {
@@ -98,7 +103,7 @@ export async function fetchStockMovements(filters: {
   page_size?: number;
 }): Promise<StockHistoryResponse> {
   const response = await fetch(`/api/stocks/movements?${qs(filters)}`);
-  return safeJson<StockHistoryResponse>(response);
+  return withSafeItems(await safeJson<StockHistoryResponse>(response));
 }
 
 export async function createStockMovement(payload: CreateStockMovementInput) {

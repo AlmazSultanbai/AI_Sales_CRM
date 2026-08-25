@@ -47,6 +47,14 @@ function toNumber(value: unknown) {
   return Number(value ?? 0);
 }
 
+/**
+ * У части заказов debt_amount в базе не пересчитан и хранит 0 при нулевой оплате,
+ * поэтому долг всегда выводим из суммы и оплат — это единственная честная цифра.
+ */
+function resolveDebt(row: { total_amount: number | string | null; paid_amount: number | string | null }) {
+  return Math.max(toNumber(row.total_amount) - toNumber(row.paid_amount), 0);
+}
+
 export async function GET(request: NextRequest) {
   const role = getRoleFromRequest(request);
   if (!can(role, "orders:read")) {
@@ -113,7 +121,7 @@ export async function GET(request: NextRequest) {
       acc.totalOrders += 1;
       acc.totalAmount += toNumber(row.total_amount);
       acc.totalPaid += toNumber(row.paid_amount);
-      acc.totalDebt += toNumber(row.debt_amount);
+      acc.totalDebt += resolveDebt(row);
       acc.installationTotal += toNumber(row.installation_amount);
       acc.workshopTotal += toNumber(row.workshop_total);
       acc.profitTotal += toNumber(row.gross_profit);
@@ -142,7 +150,7 @@ export async function GET(request: NextRequest) {
       ...row,
       total_amount: toNumber(row.total_amount),
       paid_amount: toNumber(row.paid_amount),
-      debt_amount: toNumber(row.debt_amount),
+      debt_amount: resolveDebt(row),
       installation_amount: toNumber(row.installation_amount),
       workshop_total: toNumber(row.workshop_total),
       materials_sale_total: toNumber(row.materials_sale_total),

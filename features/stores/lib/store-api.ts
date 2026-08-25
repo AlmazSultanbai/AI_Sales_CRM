@@ -21,6 +21,11 @@ function qs(params: Record<string, string | number | undefined | null>) {
   return urlParams.toString();
 }
 
+/** Списочные ответы приводим к массиву: неожиданная форма не должна ронять страницу. */
+function asList<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
 async function safeJson(response: Response) {
   const data = await response.json();
   if (!response.ok) {
@@ -32,7 +37,7 @@ async function safeJson(response: Response) {
 export async function fetchStores(search: string, filter: StoreFilter, sort: StoreSort): Promise<Store[]> {
   const query = qs({ search, filter, sort });
   const response = await fetch(`/api/stores?${query}`);
-  return safeJson(response);
+  return asList<Store>(await safeJson(response));
 }
 
 export async function fetchStoreById(storeId: string): Promise<Store> {
@@ -78,7 +83,7 @@ export async function fetchStorePurchases(
   }
 ): Promise<Purchase[]> {
   const response = await fetch(`/api/stores/${storeId}/purchases?${qs(filters)}`);
-  return safeJson(response);
+  return asList<Purchase>(await safeJson(response));
 }
 
 export async function createStorePurchase(storeId: string, payload: CreatePurchaseInput): Promise<Purchase> {
@@ -115,7 +120,7 @@ export async function fetchStorePayments(
   filters: { date_from?: string; date_to?: string; method?: string }
 ): Promise<Payment[]> {
   const response = await fetch(`/api/stores/${storeId}/payments?${qs(filters)}`);
-  return safeJson(response);
+  return asList<Payment>(await safeJson(response));
 }
 
 export async function createStorePayment(storeId: string, payload: CreatePaymentInput): Promise<Payment> {

@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin-client";
 import { getCompanyIdFromRequest, getRoleFromRequest } from "@/lib/auth/request-context";
 import { can } from "@/lib/auth/rbac";
 import { createStoreSchema, storeFilterSchema, storeSortSchema } from "@/features/stores/lib/schemas";
+import { applyStoreTotals, loadStoreTotalsIndex, pickStoreTotals } from "@/lib/supabase/store-orders-summary";
 
 export async function GET(request: NextRequest) {
   const companyId = getCompanyIdFromRequest(request);
@@ -19,38 +20,39 @@ export async function GET(request: NextRequest) {
     query = query.or(`name.ilike.%${search}%,contact_person.ilike.%${search}%`);
   }
 
-  if (filter === "with_debt") {
-    query = query.gt("current_debt_sum", 0).eq("is_active", true);
-  }
-
-  if (filter === "without_debt") {
-    query = query.eq("current_debt_sum", 0).eq("is_active", true);
-  }
-
-  if (filter === "inactive") {
-    query = query.eq("is_active", false);
-  }
-
-  if (filter === "all") {
-    query = query.eq("is_active", true);
-  }
-
-  if (sort === "name") {
-    query = query.order("name", { ascending: true });
-  }
-
-  if (sort === "debt") {
-    query = query.order("current_debt_sum", { ascending: false });
-  }
-
-  if (sort === "activity") {
-    query = query.order("last_activity_at", { ascending: false, nullsFirst: false });
-  }
+  query = filter === "inactive" ? query.eq("is_active", false) : query.eq("is_active", true);
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json(data ?? []);
+  // Долг и обороты магазина считаем по его заказам, а не по пустым закупкам,
+  // поэтому фильтр по долгу и сортировку применяем уже после расчёта.
+  let totalsIndex;
+  try {
+    totalsIndex = await loadStoreTotalsIndex(companyId);
+  } catch (totalsError) {
+    return NextResponse.json(
+      { error: totalsError instanceof Error ? totalsError.message : "Не удалось посчитать долги магазинов" },
+      { status: 500 }
+    );
+  }
+
+  let stores = (data ?? []).map((store) => applyStoreTotals(store, pickStoreTotals(totalsIndex, store)));
+
+  if (filter === "with_debt") stores = stores.filter((store) => Number(store.current_debt_sum) > 0);
+  if (filter === "without_debt") stores = stores.filter((store) => Number(store.current_debt_sum) <= 0);
+
+  if (sort === "name") {
+    stores.sort((a, b) => String(a.name).localeCompare(String(b.name), "ru"));
+  }
+  if (sort === "debt") {
+    stores.sort((a, b) => Number(b.current_debt_sum) - Number(a.current_debt_sum));
+  }
+  if (sort === "activity") {
+    stores.sort((a, b) => String(b.last_activity_at ?? "").localeCompare(String(a.last_activity_at ?? "")));
+  }
+
+  return NextResponse.json(stores);
 }
 
 export async function POST(request: NextRequest) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Download, Filter, Search, UserCircle2 } from "lucide-react";
+import { Download, Filter, Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { useStockMovements } from "@/features/inventory/hooks/use-stock-queries";
 import { formatSom, formatStockQuantity, movementTypeLabel } from "@/features/inventory/lib/stock-utils";
 import { unitLabel } from "@/lib/units";
+import { countWithWord } from "@/lib/format";
 
 function movementBadge(type: string) {
   if (type === "incoming") return "bg-emerald-100 text-emerald-700";
@@ -44,6 +45,7 @@ export function MovementsPage() {
   const [createdBy, setCreatedBy] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [showFilters, setShowFilters] = useState(false);
 
   const search = useDebounce(searchValue, 250);
   const materialDebounced = useDebounce(material, 250);
@@ -99,65 +101,82 @@ export function MovementsPage() {
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink sm:text-3xl">Движения</h1>
-          <p className="mt-1 text-sm text-muted">Полная история всех операций по складу.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="crm-title">Движения</h1>
+          <p className="crm-section-subtitle">
+            {countWithWord(summary.total, ["операция", "операции", "операций"])} · приход {summary.incoming} · расход {summary.outgoing}
+          </p>
         </div>
-        <div className="flex w-full items-center gap-2 sm:w-auto">
-          <a href={exportLink} className="flex-1 sm:flex-none">
-            <Button variant="outline" className="w-full gap-2 sm:w-auto">
-              <Download className="h-4 w-4" />
-              Выгрузить в Excel
-            </Button>
-          </a>
-          <Button variant="outline" size="icon" aria-label="Профиль" className="hidden sm:inline-flex">
-            <UserCircle2 className="h-4 w-4" />
+        <a href={exportLink} className="shrink-0">
+          <Button variant="outline" className="gap-1.5 rounded-2xl px-4">
+            <Download className="h-4 w-4" />
+            Excel
           </Button>
-        </div>
+        </a>
       </div>
 
-      <Card>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+        <input
+          className="crm-search"
+          placeholder="Поиск: товар, модель..."
+          value={searchValue}
+          onChange={(event) => {
+            setSearchValue(event.target.value);
+            setPage(1);
+          }}
+        />
+      </div>
+
+      <div className="crm-chips">
+        {(
+          [
+            { value: "all", label: "Все типы" },
+            { value: "incoming", label: "Приход" },
+            { value: "outgoing", label: "Расход" },
+            { value: "transfer", label: "Перемещение" },
+            { value: "adjustment", label: "Корректировка" },
+          ] as const
+        ).map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => {
+              setMovementType(option.value);
+              setPage(1);
+            }}
+            className={
+              movementType === option.value
+                ? "shrink-0 rounded-xl bg-accent px-4 py-2 text-[13px] font-semibold text-white"
+                : "shrink-0 rounded-xl border border-border bg-white px-4 py-2 text-[13px] font-medium text-slate-600 hover:bg-slate-50"
+            }
+          >
+            {option.label}
+          </button>
+        ))}
+
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0 gap-1.5 rounded-xl"
+          onClick={() => setShowFilters((value) => !value)}
+        >
+          <Filter className="h-3.5 w-3.5" />
+          Фильтр
+        </Button>
+      </div>
+
+      <Card className={showFilters ? "" : "hidden"}>
         <CardContent className="space-y-3 p-3 sm:p-4">
-          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-[repeat(4,minmax(0,1fr))_minmax(240px,auto)]">
+          <div className="grid gap-2 sm:grid-cols-2">
             <div>
-              <p className="mb-1 text-xs font-medium text-slate-500">Тип операции</p>
-              <select
-                className="h-10 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-slate-400"
-                value={movementType}
-                onChange={(event) => {
-                  setMovementType(event.target.value as typeof movementType);
-                  setPage(1);
-                }}
-              >
-                <option value="all">Все типы</option>
-                <option value="incoming">Приход</option>
-                <option value="outgoing">Расход</option>
-                <option value="transfer">Перемещение</option>
-                <option value="adjustment">Корректировка</option>
-              </select>
+              <p className="mb-1 text-xs font-medium text-slate-500">Дата от</p>
+              <Input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} />
             </div>
             <div>
-              <p className="mb-1 text-xs font-medium text-slate-500">Период</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} />
-                <Input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} />
-              </div>
-            </div>
-            <div>
-              <p className="mb-1 text-xs font-medium text-slate-500">Поиск</p>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input
-                  className="pl-9"
-                  placeholder="Товар, модель..."
-                  value={searchValue}
-                  onChange={(event) => {
-                    setSearchValue(event.target.value);
-                    setPage(1);
-                  }}
-                />
-              </div>
+              <p className="mb-1 text-xs font-medium text-slate-500">Дата до</p>
+              <Input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} />
             </div>
             <div>
               <p className="mb-1 text-xs font-medium text-slate-500">Материал</p>
@@ -169,7 +188,7 @@ export function MovementsPage() {
             </div>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+          <div className="grid gap-2 sm:grid-cols-2">
             <div>
               <p className="mb-1 text-xs font-medium text-slate-500">Модель</p>
               <Input value={model} onChange={(event) => { setModel(event.target.value); setPage(1); }} placeholder="Все модели" />
@@ -229,30 +248,24 @@ export function MovementsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="grid grid-cols-2 gap-2 p-3 sm:p-4 md:grid-cols-5">
-          <div className="rounded-xl border border-border bg-white px-3 py-2">
-            <p className="text-xs text-slate-500">Всего операций</p>
-            <p className="mt-1 text-2xl font-bold text-ink">{summary.total}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-emerald-50 px-3 py-2">
-            <p className="text-xs text-emerald-700">Приход</p>
-            <p className="mt-1 text-2xl font-bold text-emerald-700">{summary.incoming}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-rose-50 px-3 py-2">
-            <p className="text-xs text-rose-700">Расход</p>
-            <p className="mt-1 text-2xl font-bold text-rose-700">{summary.outgoing}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-blue-50 px-3 py-2">
-            <p className="text-xs text-blue-700">Перемещение</p>
-            <p className="mt-1 text-2xl font-bold text-blue-700">{summary.transfer}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-amber-50 px-3 py-2">
-            <p className="text-xs text-amber-700">Корректировка</p>
-            <p className="mt-1 text-2xl font-bold text-amber-700">{summary.adjustment}</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <div className="crm-row">
+          <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Приход</p>
+          <p className="mt-1 text-2xl font-bold leading-none text-emerald-700">{summary.incoming}</p>
+        </div>
+        <div className="crm-row">
+          <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Расход</p>
+          <p className="mt-1 text-2xl font-bold leading-none text-rose-600">{summary.outgoing}</p>
+        </div>
+        <div className="crm-row">
+          <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Перемещение</p>
+          <p className="mt-1 text-2xl font-bold leading-none text-blue-700">{summary.transfer}</p>
+        </div>
+        <div className="crm-row">
+          <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Корректировка</p>
+          <p className="mt-1 text-2xl font-bold leading-none text-amber-600">{summary.adjustment}</p>
+        </div>
+      </div>
 
       {error ? (
         <Card>
@@ -260,142 +273,135 @@ export function MovementsPage() {
         </Card>
       ) : null}
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1020px] text-sm">
-              <thead className="border-b border-border bg-slate-50 text-xs text-slate-500">
-                <tr>
-                  <th className="hidden px-2 py-3 text-left lg:table-cell"><input type="checkbox" /></th>
-                  <th className="px-2 py-3 text-left font-semibold">Дата и время</th>
-                  <th className="px-2 py-3 text-left font-semibold">Тип операции</th>
-                  <th className="px-2 py-3 text-left font-semibold">Товар / Материал</th>
-                  <th className="hidden px-2 py-3 text-left font-semibold xl:table-cell">Модель</th>
-                  <th className="hidden px-2 py-3 text-left font-semibold 2xl:table-cell">Цвет</th>
-                  <th className="px-2 py-3 text-left font-semibold">Количество</th>
-                  <th className="hidden px-2 py-3 text-left font-semibold lg:table-cell">Сумма</th>
-                  <th className="hidden px-2 py-3 text-left font-semibold 2xl:table-cell">Источник / Получатель</th>
-                  <th className="hidden px-2 py-3 text-left font-semibold 2xl:table-cell">Комментарий</th>
-                  <th className="hidden px-2 py-3 text-left font-semibold xl:table-cell">Пользователь</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {isLoading ? (
-                  <tr>
-                    <td className="px-2 py-8 text-center text-muted" colSpan={12}>
-                      Загрузка движений...
-                    </td>
-                  </tr>
-                ) : null}
+      {isLoading ? (
+        <Card>
+          <CardContent className="p-10 text-center text-sm text-muted">Загрузка движений...</CardContent>
+        </Card>
+      ) : !items.length ? (
+        <Card>
+          <CardContent className="p-10 text-center text-sm text-muted">Движения не найдены по текущим фильтрам.</CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2.5">
+          {items.map((movement) => {
+            const stock = movement.stock_items as
+              | {
+                  material_name?: string | null;
+                  model_code?: string | null;
+                  color_name?: string | null;
+                  photo_url?: string | null;
+                  unit?: "m2" | "meter" | "piece" | "pack" | null;
+                }
+              | null
+              | undefined;
+            const source = (movement as { source_name?: string | null }).source_name;
+            const destination = (movement as { destination_name?: string | null }).destination_name;
+            const creatorName = (movement as { creator_name?: string | null }).creator_name;
+            const created = new Date(movement.created_at);
+            const route = [source ? `От: ${source}` : null, destination ? `Кому: ${destination}` : null]
+              .filter(Boolean)
+              .join(" · ");
+            // В базе расход хранится с минусом. Показываем модуль количества,
+            // а направление даём знаком и цветом — так читается однозначно.
+            const rawQuantity = Number(movement.quantity_m2 ?? movement.quantity ?? 0);
+            const isOutgoing = movement.movement_type === "outgoing" || movement.movement_type === "writeoff";
+            const isIncoming = movement.movement_type === "incoming";
+            const quantitySign = isOutgoing || rawQuantity < 0 ? "−" : isIncoming ? "+" : "";
+            const quantityClass = isOutgoing || rawQuantity < 0 ? "text-rose-600" : isIncoming ? "text-emerald-700" : "text-ink";
 
-                {!isLoading && !items.length ? (
-                  <tr>
-                    <td className="px-2 py-8 text-center text-muted" colSpan={12}>
-                      Движения не найдены по текущим фильтрам.
-                    </td>
-                  </tr>
-                ) : null}
+            return (
+              <div key={movement.id} className="crm-row crm-row-link">
+                <div className="flex items-start gap-3">
+                  <ProductThumb
+                    src={stock?.photo_url ?? null}
+                    alt={stock?.material_name ?? "Товар"}
+                    className="h-12 w-12 shrink-0 rounded-xl"
+                  />
 
-                {!isLoading
-                  ? items.map((movement) => {
-                      const stock = movement.stock_items as
-                        | {
-                            material_name?: string | null;
-                            model_code?: string | null;
-                            color_name?: string | null;
-                            photo_url?: string | null;
-                            unit?: "m2" | "meter" | "piece" | "pack" | null;
-                          }
-                        | null
-                        | undefined;
-                      const source = (movement as { source_name?: string | null }).source_name;
-                      const destination = (movement as { destination_name?: string | null }).destination_name;
-                      const creatorName = (movement as { creator_name?: string | null }).creator_name;
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="crm-row-title truncate">{stock?.material_name ?? "Товар"}</p>
+                        <p className="crm-row-sub truncate">
+                          {[stock?.model_code, stock?.color_name].filter(Boolean).join(" · ") || "Без характеристик"}
+                        </p>
+                      </div>
 
-                      return (
-                        <tr key={movement.id} className="transition hover:bg-slate-50/70">
-                          <td className="hidden px-2 py-2.5 lg:table-cell"><input type="checkbox" /></td>
-                          <td className="px-2 py-2.5 text-xs text-slate-700">
-                            <p>{new Date(movement.created_at).toLocaleDateString("ru-RU")}</p>
-                            <p className="mt-0.5 text-[11px] text-slate-500">
-                              {new Date(movement.created_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
-                            </p>
-                          </td>
-                          <td className="px-2 py-2.5">
-                            <Badge className={movementBadge(movement.movement_type)}>
-                              {movementTypeLabel(movement.movement_type)}
-                            </Badge>
-                          </td>
-                          <td className="px-2 py-2.5">
-                            <div className="flex items-center gap-2">
-                              <ProductThumb src={stock?.photo_url ?? null} alt={stock?.material_name ?? "Товар"} className="h-8 w-8 rounded-md" />
-                              <span className="font-semibold text-ink">{stock?.material_name ?? "—"}</span>
-                            </div>
-                          </td>
-                          <td className="hidden px-2 py-2.5 text-slate-700 xl:table-cell">{stock?.model_code ?? "—"}</td>
-                          <td className="hidden px-2 py-2.5 text-slate-700 2xl:table-cell">
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className={`h-2.5 w-2.5 rounded-full ${dotColor(stock?.color_name)}`} />
-                              {stock?.color_name ?? "—"}
-                            </span>
-                          </td>
-                          <td className="px-2 py-2.5 font-semibold text-ink">
-                            {formatStockQuantity(Number(movement.quantity_m2 ?? movement.quantity ?? 0))} {unitLabel(stock?.unit)}
-                          </td>
-                          <td className="hidden px-2 py-2.5 text-slate-700 lg:table-cell">{formatSom(Number(movement.total_amount ?? 0))}</td>
-                          <td className="hidden px-2 py-2.5 text-xs text-slate-700 2xl:table-cell">
-                            {source || destination
-                              ? [source ? `От: ${source}` : null, destination ? `Кому: ${destination}` : null].filter(Boolean).join(" · ")
-                              : "—"}
-                            {movement.supplier_name ? <div className="mt-1 text-[11px] text-slate-500">Поставщик: {movement.supplier_name}</div> : null}
-                          </td>
-                          <td className="hidden px-2 py-2.5 text-xs text-slate-700 2xl:table-cell">{movement.comment ?? "—"}</td>
-                          <td className="hidden px-2 py-2.5 text-xs text-slate-700 xl:table-cell">{creatorName ?? "admin"}</td>
-                        </tr>
-                      );
-                    })
-                  : null}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                      <div className="text-right">
+                        <p className={`crm-row-amount ${quantityClass}`}>
+                          {quantitySign}
+                          {formatStockQuantity(Math.abs(rawQuantity))} {unitLabel(stock?.unit)}
+                        </p>
+                        <p className="crm-row-amount-sub">{formatSom(Number(movement.total_amount ?? 0))}</p>
+                      </div>
+                    </div>
 
-      <Card>
-        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <p className="text-sm text-muted">
-            Показано {(pagination.page - 1) * pagination.pageSize + 1}–{Math.min(pagination.page * pagination.pageSize, pagination.total)} из {pagination.total}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled={pagination.page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
-              Назад
-            </Button>
-            <span className="text-xs text-muted">
-              {pagination.page} / {pagination.totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pagination.page >= pagination.totalPages}
-              onClick={() => setPage((value) => value + 1)}
-            >
-              Вперед
-            </Button>
-            <select
-              className="h-8 rounded-lg border border-border bg-white px-2 text-xs"
-              value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value));
-                setPage(1);
-              }}
-            >
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </div>
-        </CardContent>
-      </Card>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <Badge className={`rounded-lg px-2.5 py-1 text-[12px] font-semibold ${movementBadge(movement.movement_type)}`}>
+                        {movementTypeLabel(movement.movement_type)}
+                      </Badge>
+                      <span className="crm-pill crm-pill-soft">
+                        {created.toLocaleDateString("ru-RU")},{" "}
+                        {created.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                      {stock?.color_name ? (
+                        <span className="crm-pill crm-pill-soft">
+                          <span className={`h-2.5 w-2.5 rounded-full ${dotColor(stock.color_name)}`} />
+                          {stock.color_name}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {route || movement.supplier_name || movement.comment ? (
+                      <p className="mt-2 truncate text-[13px] text-muted">
+                        {[route, movement.supplier_name ? `Поставщик: ${movement.supplier_name}` : null, movement.comment]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    ) : null}
+
+                    <p className="mt-1 text-[12px] text-slate-400">{creatorName ?? "admin"}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+        <p className="text-sm text-muted">
+          Показано {(pagination.page - 1) * pagination.pageSize + 1}–{Math.min(pagination.page * pagination.pageSize, pagination.total)} из {pagination.total}
+        </p>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" disabled={pagination.page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+            Назад
+          </Button>
+          <span className="text-xs text-muted">
+            {pagination.page} / {pagination.totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pagination.page >= pagination.totalPages}
+            onClick={() => setPage((value) => value + 1)}
+          >
+            Вперед
+          </Button>
+          <select
+            className="h-8 rounded-lg border border-border bg-white px-2 text-xs"
+            value={pageSize}
+            onChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setPage(1);
+            }}
+          >
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </div>
+      </div>
     </section>
   );
 }

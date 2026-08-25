@@ -37,12 +37,17 @@
 }
 
 @layer components {
+  /* Узкая колонка по центру — одинаково на телефоне и на компьютере */
   .crm-page {
-    @apply mx-auto w-full max-w-[1700px] space-y-4;
+    @apply mx-auto w-full max-w-[960px] space-y-4;
   }
 
   .crm-surface {
     @apply rounded-2xl border border-border bg-panel shadow-panel;
+  }
+
+  .crm-title {
+    @apply text-[26px] font-bold leading-tight tracking-tight text-ink sm:text-[30px];
   }
 
   .crm-section-title {
@@ -51,5 +56,66 @@
 
   .crm-section-subtitle {
     @apply mt-1 text-sm text-muted;
+  }
+
+  /* Карточка-строка списка */
+  .crm-row {
+    @apply rounded-2xl border border-border bg-white p-3 shadow-panel transition sm:p-4;
+  }
+
+  .crm-row-link {
+    @apply hover:border-slate-300 hover:shadow-soft;
+  }
+
+  .crm-row-title {
+    @apply text-[16px] font-bold leading-tight text-ink sm:text-[17px];
+  }
+
+  .crm-row-sub {
+    @apply mt-1 text-[13px] leading-snug text-muted;
+  }
+
+  .crm-row-amount {
+    @apply whitespace-nowrap text-[17px] font-bold leading-tight text-ink sm:text-[19px];
+  }
+
+  .crm-row-amount-sub {
+    @apply mt-0.5 whitespace-nowrap text-[12px] text-muted;
+  }
+
+  /* Бейджи-«таблетки» */
+  .crm-pill {
+    @apply inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[12px] font-semibold leading-none;
+  }
+
+  .crm-pill-green {
+    @apply bg-emerald-700 text-white;
+  }
+
+  .crm-pill-red {
+    @apply bg-rose-600 text-white;
+  }
+
+  .crm-pill-amber {
+    @apply bg-amber-500 text-white;
+  }
+
+  .crm-pill-soft {
+    @apply bg-slate-100 text-slate-600;
+  }
+
+  /* Ряд кнопок-чипов с горизонтальной прокруткой без полосы прокрутки */
+  .crm-chips {
+    @apply -mx-1 flex gap-2 overflow-x-auto px-1 pb-1;
+    scrollbar-width: none;
+  }
+
+  .crm-chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Крупный поиск */
+  .crm-search {
+    @apply h-12 w-full rounded-2xl border border-border bg-white pl-11 pr-4 text-[15px] text-ink outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:shadow-[0_0_0_3px_rgba(42,67,104,0.12)];
   }
 }

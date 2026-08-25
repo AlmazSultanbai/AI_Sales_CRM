@@ -17,7 +17,8 @@ export async function fetchCollections(search?: string, type?: string): Promise<
     throw new Error(data.error ?? "Не удалось получить коллекции");
   }
 
-  return data;
+  // Неожиданная форма ответа не должна ронять страницу целиком.
+  return Array.isArray(data) ? data : [];
 }
 
 export async function createCollection(payload: CreateCollectionInput): Promise<Collection> {

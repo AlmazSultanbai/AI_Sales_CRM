@@ -1,11 +1,10 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { CatalogType } from "@/types/domain";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { catalogTypeLabels, catalogTypeOptions } from "@/features/catalog/lib/labels";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -15,6 +14,7 @@ import { CollectionCard } from "@/features/catalog/components/collection-card";
 import { CollectionDialog } from "@/features/catalog/components/collection-dialog";
 import { CreateCollectionInput, CreateModelInput, UpdateCollectionInput, UpdateModelInput } from "@/features/catalog/lib/schemas";
 import { useToaster } from "@/components/ui/toaster";
+import { countWithWord } from "@/lib/format";
 
 export function CatalogClient() {
   const { toast } = useToaster();
@@ -156,52 +156,49 @@ export function CatalogClient() {
   };
 
   return (
-    <section className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-ink sm:text-3xl">Каталог</h1>
-        <p className="mt-2 text-sm text-muted">Управление коллекциями, моделями и ценами</p>
+    <section className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="crm-title">Каталог</h1>
+          <p className="crm-section-subtitle">Всего: {countWithWord(data.length, ["коллекция", "коллекции", "коллекций"])}</p>
+        </div>
+
+        <CollectionDialog
+          mode="create"
+          onCreate={handleCreate}
+          trigger={
+            <Button className="shrink-0 gap-1.5 rounded-2xl px-4">
+              <Plus className="h-4 w-4" />
+              Коллекция
+            </Button>
+          }
+          disabled={isMutating}
+        />
       </div>
 
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+        <input
+          className="crm-search"
+          placeholder="Поиск: коллекция, модель..."
+          value={searchValue}
+          onChange={(event) => setSearchValue(event.target.value)}
+        />
+      </div>
+
+      <Tabs value={activeType} onValueChange={(value) => setActiveType(value as "all" | CatalogType)}>
+        <div className="crm-chips w-full">
+          <TabsList className="min-w-max rounded-2xl">
+            {catalogTypeOptions.map((type) => (
+              <TabsTrigger value={type} key={type} className="rounded-xl px-4 py-2 text-[13px]">
+                {catalogTypeLabels[type]}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+      </Tabs>
+
       <CatalogStats collections={data} />
-
-      <Card>
-        <CardContent className="space-y-4 p-5">
-          <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
-            <Tabs value={activeType} onValueChange={(value) => setActiveType(value as "all" | CatalogType)}>
-              <div className="w-full overflow-x-auto">
-                <TabsList className="min-w-max">
-                  {catalogTypeOptions.map((type) => (
-                    <TabsTrigger value={type} key={type}>
-                      {catalogTypeLabels[type]}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </div>
-            </Tabs>
-
-            <div className="flex w-full flex-col gap-3 sm:flex-row xl:w-auto">
-              <Input
-                className="sm:w-64"
-                placeholder="Поиск коллекции..."
-                value={searchValue}
-                onChange={(event) => setSearchValue(event.target.value)}
-              />
-
-              <CollectionDialog
-                mode="create"
-                onCreate={handleCreate}
-                trigger={
-                  <Button className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Коллекция
-                  </Button>
-                }
-                disabled={isMutating}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {error ? (
         <Card>
@@ -215,7 +212,7 @@ export function CatalogClient() {
         </Card>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             {data.map((collection) => (
               <CollectionCard
                 key={collection.id}

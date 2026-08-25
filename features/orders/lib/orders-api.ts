@@ -10,6 +10,11 @@ function qs(params: Record<string, string | number | undefined | null | boolean>
   return urlParams.toString();
 }
 
+/** items из ответа приводим к массиву — страница не должна падать на неожиданной форме. */
+function withSafeItems<T extends { items?: unknown }>(payload: T): T {
+  return Array.isArray(payload?.items) ? payload : ({ ...payload, items: [] } as T);
+}
+
 async function safeJson<T>(response: Response): Promise<T> {
   const data = await response.json();
   if (!response.ok) {
@@ -65,7 +70,7 @@ export type OrdersListResponse = {
 
 export async function fetchOrders(filters: OrdersFilter): Promise<OrdersListResponse> {
   const response = await fetch(`/api/orders?${qs(filters)}`);
-  return safeJson<OrdersListResponse>(response);
+  return withSafeItems(await safeJson<OrdersListResponse>(response));
 }
 
 export async function fetchOrderById(orderId: string): Promise<Order & { movements?: unknown[] }> {

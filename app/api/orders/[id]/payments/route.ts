@@ -29,7 +29,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!order) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 
   const amount = Number(parsed.data.amount);
-  const debtAmount = Number(order.debt_amount ?? Number(order.total_amount ?? 0) - Number(order.paid_amount ?? 0));
+  // Долг всегда из формулы: хранимый debt_amount у части заказов не пересчитан
+  // и держит 0 при нулевой оплате — такая проверка блокировала честные оплаты.
+  const debtAmount = Math.max(Number(order.total_amount ?? 0) - Number(order.paid_amount ?? 0), 0);
   if (amount > debtAmount + 0.01) {
     return NextResponse.json(
       { error: `Сумма оплаты не может превышать остаток долга (${debtAmount})` },

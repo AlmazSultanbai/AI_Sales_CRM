@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, CircleDollarSign, Filter, Plus, Sheet } from "lucide-react";
-import { differenceInCalendarDays, parseISO } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
+import { CircleDollarSign, Filter, Plus, Sheet, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCollections } from "@/features/catalog/hooks/use-catalog-queries";
 import { useOrders } from "@/features/orders/hooks/use-orders-queries";
@@ -15,14 +15,15 @@ import { PaymentFormDialog } from "@/features/stores/components/payment-form-dia
 import { PurchaseDetailsDialog } from "@/features/stores/components/purchase-details-dialog";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useStoreDetails, useStoreMutations, useStorePayments, useStorePurchases, useStores } from "@/features/stores/hooks/use-stores-queries";
-import { Badge } from "@/components/ui/badge";
+import { ActionMenu } from "@/components/ui/action-menu";
+import { PayDebtDialog } from "@/features/stores/components/pay-debt-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToaster } from "@/components/ui/toaster";
 import { Purchase, Store } from "@/types/domain";
-import { debtRiskByDays, formatCurrency, formatPurchaseId } from "@/features/stores/lib/view-utils";
+import { formatCurrency, formatPurchaseId } from "@/features/stores/lib/view-utils";
 
 type StoreFilter = "all" | "with_debt" | "without_debt" | "inactive";
 type StoreSort = "name" | "debt" | "activity";
@@ -60,6 +61,7 @@ export function StoresPage() {
   const [storeSort, setStoreSort] = useState<StoreSort>("activity");
   const [selectedStoreId, setSelectedStoreId] = useState<string>();
   const [activeTab, setActiveTab] = useState("purchases");
+  const [ordersDebtOnly, setOrdersDebtOnly] = useState(false);
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase>();
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -102,6 +104,16 @@ export function StoresPage() {
   }, {
     enabled: Boolean(activeStore?.id) && activeTab === "purchases",
   });
+  const queryClient = useQueryClient();
+  const invalidateAfterPayment = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["stores"] }),
+      queryClient.invalidateQueries({ queryKey: ["store", selectedStoreId] }),
+      queryClient.invalidateQueries({ queryKey: ["orders"] }),
+      queryClient.invalidateQueries({ queryKey: ["order"] }),
+    ]);
+  };
+
   const {
     createStoreMutation,
     updateStoreMutation,
@@ -137,7 +149,6 @@ export function StoresPage() {
   const totalPaid = Number(activeStore?.total_paid_sum ?? 0);
   const totalDebt = Number(activeStore?.current_debt_sum ?? activeStore?.debt_balance ?? 0);
 
-  const openDebts = purchases.filter((purchase) => Number(purchase.debt_amount) > 0);
   const storeOrders = useMemo(() => {
     const items = ordersData?.items ?? [];
     const storeName = (activeStore?.name ?? "").trim().toLowerCase();
@@ -222,101 +233,109 @@ export function StoresPage() {
           {activeStore ? (
             <>
               <Card>
-                <CardContent className="space-y-4 p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <h2 className="text-2xl font-bold text-ink">{activeStore.name}</h2>
+                <CardContent className="space-y-4 p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="truncate text-2xl font-bold text-ink">{activeStore.name}</h2>
+                      {/* Информация — в шапке профиля: отдельная вкладка ей не нужна. */}
                       <div className="mt-2 grid gap-1 text-sm text-muted">
                         <p>Контакт: {activeStore.contact_person || "не указан"}</p>
                         <p>Телефон: {activeStore.phone || "не указан"}</p>
                         <p>Адрес: {activeStore.address || "не указан"}</p>
+                        {activeStore.notes ? <p>Заметки: {activeStore.notes}</p> : null}
+                        <p className="text-xs">
+                          Создан: {activeStore.created_at ? new Date(activeStore.created_at).toLocaleDateString("ru-RU") : "-"} ·
+                          активность: {activeStore.last_activity_at ? new Date(activeStore.last_activity_at).toLocaleDateString("ru-RU") : "-"}
+                        </p>
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      <Button className="gap-2" onClick={() => router.push(`/orders/new?storeId=${activeStore.id}`)}>
-                        <Plus className="h-4 w-4" />
-                        Заказ
-                      </Button>
+                    <ActionMenu
+                      ariaLabel="Действия с клиентом"
+                      items={[
+                        {
+                          label: "Выгрузить Excel (CSV)",
+                          icon: <Sheet className="h-4 w-4" />,
+                          onSelect: () => exportStoreCsv(activeStore, purchases),
+                        },
+                        {
+                          label: "Удалить клиента",
+                          icon: <Trash2 className="h-4 w-4" />,
+                          danger: true,
+                          onSelect: async () => {
+                            const firstConfirm = window.confirm("Удалить клиента?");
+                            if (!firstConfirm) return;
+                            const secondConfirm = window.confirm("Вы точно хотите удалить этого клиента?");
+                            if (!secondConfirm) return;
 
-                      <PaymentFormDialog
-                        purchases={purchases}
-                        onCreate={async (payload) => {
-                          await createPaymentMutation.mutateAsync({ storeId: activeStore.id, payload });
-                        }}
-                        disabled={isPending}
-                        trigger={
-                          <Button className="gap-2 border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700">
-                            <CircleDollarSign className="h-4 w-4" />
-                            Оплата
-                          </Button>
-                        }
-                      />
+                            const password = window.prompt("Введите пароль для подтверждения удаления клиента");
+                            if (!password) return;
 
-                      <StoreFormDialog
-                        mode="edit"
-                        initialStore={activeStore}
-                        onUpdate={async (payload) => {
-                          await updateStoreMutation.mutateAsync({ storeId: activeStore.id, payload });
-                        }}
-                        disabled={isPending}
-                        trigger={<Button variant="outline">Редактировать</Button>}
-                      />
-                    </div>
+                            try {
+                              await archiveStoreMutation.mutateAsync({ storeId: activeStore.id, password });
+                              toast({
+                                title: "Успешно сохранено",
+                                description: "Клиент удален",
+                                variant: "success",
+                                duration: 3000,
+                              });
+                            } catch (error) {
+                              toast({
+                                title: "Ошибка удаления",
+                                description: error instanceof Error ? error.message : "Не удалось удалить клиента",
+                                variant: "error",
+                                duration: 4000,
+                              });
+                            }
+                          },
+                        },
+                      ]}
+                    />
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="gap-1"
-                      onClick={() => setActiveTab("debts")}
-                    >
-                      <ArrowUpRight className="h-3.5 w-3.5" />
-                      Все долги клиента
+                    <Button className="gap-2" onClick={() => router.push(`/orders/new?storeId=${activeStore.id}`)}>
+                      <Plus className="h-4 w-4" />
+                      Заказ
                     </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="gap-1"
-                      onClick={() => exportStoreCsv(activeStore, purchases)}
-                    >
-                      <Sheet className="h-3.5 w-3.5" />
-                      Выгрузить Excel (CSV)
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                      onClick={async () => {
-                        const firstConfirm = window.confirm("Удалить клиента?");
-                        if (!firstConfirm) return;
-                        const secondConfirm = window.confirm("Вы точно хотите удалить этого клиента?");
-                        if (!secondConfirm) return;
 
-                        const password = window.prompt("Введите пароль для подтверждения удаления клиента");
-                        if (!password) return;
-
-                        try {
-                          await archiveStoreMutation.mutateAsync({ storeId: activeStore.id, password });
-                          toast({
-                            title: "Успешно сохранено",
-                            description: "Клиент удален",
-                            variant: "success",
-                            duration: 3000,
-                          });
-                        } catch (error) {
-                          toast({
-                            title: "Ошибка удаления",
-                            description: error instanceof Error ? error.message : "Не удалось удалить магазин",
-                            variant: "error",
-                            duration: 4000,
-                          });
-                        }
+                    <PayDebtDialog
+                      store={activeStore}
+                      totalDebt={totalDebt}
+                      onDone={() => {
+                        toast({
+                          title: "Оплата принята",
+                          description: "Долг клиента пересчитан",
+                          variant: "success",
+                          duration: 3000,
+                        });
+                        void invalidateAfterPayment();
                       }}
-                    >
-                      Удалить клиента
-                    </Button>
+                    />
+
+                    <PaymentFormDialog
+                      purchases={purchases}
+                      onCreate={async (payload) => {
+                        await createPaymentMutation.mutateAsync({ storeId: activeStore.id, payload });
+                      }}
+                      disabled={isPending}
+                      trigger={
+                        <Button variant="outline" className="gap-2">
+                          <CircleDollarSign className="h-4 w-4" />
+                          Оплата закупки
+                        </Button>
+                      }
+                    />
+
+                    <StoreFormDialog
+                      mode="edit"
+                      initialStore={activeStore}
+                      onUpdate={async (payload) => {
+                        await updateStoreMutation.mutateAsync({ storeId: activeStore.id, payload });
+                      }}
+                      disabled={isPending}
+                      trigger={<Button variant="outline">Редактировать</Button>}
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -331,13 +350,28 @@ export function StoresPage() {
                         <TabsList className="min-w-max">
                           <TabsTrigger value="purchases">Заказы</TabsTrigger>
                           <TabsTrigger value="payments">Платежи</TabsTrigger>
-                          <TabsTrigger value="debts">Долги</TabsTrigger>
-                          <TabsTrigger value="info">Информация</TabsTrigger>
                         </TabsList>
                       </div>
                     </div>
 
                     <TabsContent value="purchases" className="space-y-4">
+                      {/* Прежняя вкладка «Долги» = этот фильтр: те же заказы, только с долгом. */}
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setOrdersDebtOnly(false)}
+                          className={!ordersDebtOnly ? "rounded-xl bg-accent px-4 py-2 text-[13px] font-semibold text-white" : "rounded-xl border border-border bg-white px-4 py-2 text-[13px] font-medium text-slate-600"}
+                        >
+                          Все
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOrdersDebtOnly(true)}
+                          className={ordersDebtOnly ? "rounded-xl bg-rose-600 px-4 py-2 text-[13px] font-semibold text-white" : "rounded-xl border border-border bg-white px-4 py-2 text-[13px] font-medium text-slate-600"}
+                        >
+                          С долгом
+                        </button>
+                      </div>
                       <div className="grid gap-2 rounded-xl border border-border bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-6">
                         <div className="lg:col-span-2">
                           <label className="mb-1 block text-xs font-medium text-muted">Статус</label>
@@ -400,7 +434,9 @@ export function StoresPage() {
                       {!ordersLoading ? (
                         <OrderFeedTable
                           title="Лента заказов (сделанных до выбранной даты)"
-                          items={storeOrders}
+                          items={ordersDebtOnly
+                            ? storeOrders.filter((order) => Number(order.total_amount) - Number(order.paid_amount) > 0.009)
+                            : storeOrders}
                           onOpen={(id) => setSelectedOrderId(id)}
                         />
                       ) : null}
@@ -469,69 +505,6 @@ export function StoresPage() {
                       ) : null}
                     </TabsContent>
 
-                    <TabsContent value="debts" className="space-y-3">
-                      {openDebts.map((purchase) => {
-                        const daysOverdue = differenceInCalendarDays(new Date(), parseISO(purchase.purchase_date));
-                        const risk = debtRiskByDays(daysOverdue);
-
-                        return (
-                          <div key={purchase.id} className="rounded-2xl border border-border bg-white p-4">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-ink">{formatPurchaseId(purchase.purchase_number)}</p>
-                                <p className="text-xs text-muted">
-                                  {new Date(purchase.purchase_date).toLocaleDateString("ru-RU")} • Просрочка: {daysOverdue} дн.
-                                </p>
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                <Badge className={risk.className}>{risk.label}</Badge>
-                                <span className="text-sm font-semibold text-rose-700">
-                                  {formatCurrency(Number(purchase.debt_amount))}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                      {!openDebts.length ? (
-                        <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-emerald-700">
-                          У клиента нет открытых долгов
-                        </div>
-                      ) : null}
-                    </TabsContent>
-
-                    <TabsContent value="info">
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <div className="rounded-2xl border border-border bg-white p-4">
-                          <p className="text-xs uppercase tracking-wide text-slate-500">Контакты</p>
-                          <div className="mt-3 space-y-1 text-sm text-ink">
-                            <p>Контакт: {activeStore.contact_person || "-"}</p>
-                            <p>Телефон: {activeStore.phone || "-"}</p>
-                            <p>Адрес: {activeStore.address || "-"}</p>
-                          </div>
-                        </div>
-
-                        <div className="rounded-2xl border border-border bg-white p-4">
-                          <p className="text-xs uppercase tracking-wide text-slate-500">Метрики</p>
-                          <div className="mt-3 space-y-1 text-sm text-ink">
-                            <p>Всего закупок: {formatCurrency(totalPurchases)}</p>
-                            <p>Оплачено: {formatCurrency(totalPaid)}</p>
-                            <p>Текущий долг: {formatCurrency(totalDebt)}</p>
-                          </div>
-                        </div>
-
-                        <div className="rounded-2xl border border-border bg-white p-4 md:col-span-2">
-                          <p className="text-xs uppercase tracking-wide text-slate-500">Заметки</p>
-                          <p className="mt-2 text-sm text-ink">{activeStore.notes || "Нет заметок"}</p>
-                          <p className="mt-3 text-xs text-muted">
-                            Создан: {activeStore.created_at ? new Date(activeStore.created_at).toLocaleString("ru-RU") : "-"} • Последняя активность:{" "}
-                            {activeStore.last_activity_at ? new Date(activeStore.last_activity_at).toLocaleString("ru-RU") : "-"}
-                          </p>
-                        </div>
-                      </div>
-                    </TabsContent>
                   </Tabs>
                 </CardContent>
               </Card>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Download, Filter, Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { ProductThumb } from "@/features/media/components/product-thumb";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useStockMovements } from "@/features/inventory/hooks/use-stock-queries";
+import { useOrders } from "@/features/orders/hooks/use-orders-queries";
+import { formatCurrency, formatOrderNumber, orderPaymentStatusMeta } from "@/features/orders/lib/view-utils";
 import { formatSom, formatStockQuantity, movementTypeLabel } from "@/features/inventory/lib/stock-utils";
 import { unitLabel } from "@/lib/units";
 import { countWithWord } from "@/lib/format";
@@ -32,7 +35,21 @@ function dotColor(name?: string | null) {
   return "bg-slate-500";
 }
 
+type SalesPeriod = "today" | "week" | "month";
+
+function periodRange(period: SalesPeriod) {
+  const today = new Date();
+  const to = today.toISOString().slice(0, 10);
+  if (period === "today") return { from: to, to };
+  const days = period === "week" ? 6 : 29;
+  const from = new Date(today.getTime() - days * 86400000).toISOString().slice(0, 10);
+  return { from, to };
+}
+
 export function MovementsPage() {
+  const router = useRouter();
+  const [tab, setTab] = useState<"sales" | "stock">("sales");
+  const [salesPeriod, setSalesPeriod] = useState<SalesPeriod>("today");
   const [movementType, setMovementType] = useState<"all" | "incoming" | "outgoing" | "transfer" | "adjustment">("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -86,7 +103,35 @@ export function MovementsPage() {
     ]
   );
 
-  const { data, isLoading, error } = useStockMovements(filters);
+  const salesRange = periodRange(salesPeriod);
+  const { data: salesData, isLoading: salesLoading } = useOrders(
+    {
+      page: 1,
+      page_size: 100,
+      status: "all",
+      date_from: salesRange.from,
+      date_to: salesRange.to,
+    },
+    { enabled: tab === "sales" }
+  );
+  const salesOrders = salesData?.items ?? [];
+  const salesSummary = salesData?.summary ?? {
+    totalOrders: 0,
+    totalAmount: 0,
+    totalPaid: 0,
+    totalDebt: 0,
+    installationTotal: 0,
+    workshopTotal: 0,
+    profitTotal: 0,
+    cancelled: 0,
+    draft: 0,
+  };
+  const salesPositions = salesOrders.reduce(
+    (acc, order) => acc + ((order as { order_items?: Array<unknown> }).order_items?.length ?? 0),
+    0
+  );
+
+  const { data, isLoading, error } = useStockMovements(filters, { enabled: tab === "stock" });
   const items = data?.items ?? [];
   const summary = data?.summary ?? { total: 0, incoming: 0, outgoing: 0, transfer: 0, adjustment: 0 };
   const pagination = data?.pagination ?? { page: 1, pageSize, total: 0, totalPages: 1 };
@@ -105,16 +150,115 @@ export function MovementsPage() {
         <div className="min-w-0">
           <h1 className="crm-title">Отчёты</h1>
           <p className="crm-section-subtitle">
-            {countWithWord(summary.total, ["операция", "операции", "операций"])} · приход {summary.incoming} · расход {summary.outgoing}
+            {tab === "sales"
+              ? `${countWithWord(salesSummary.totalOrders, ["заказ", "заказа", "заказов"])} на ${formatCurrency(salesSummary.totalAmount)}`
+              : `${countWithWord(summary.total, ["операция", "операции", "операций"])} · приход ${summary.incoming} · расход ${summary.outgoing}`}
           </p>
         </div>
-        <a href={exportLink} className="shrink-0">
+        <a
+          href={tab === "sales" ? `/api/exports/excel?section=orders&date_from=${salesRange.from}&date_to=${salesRange.to}` : exportLink}
+          className="shrink-0"
+        >
           <Button variant="outline" className="gap-1.5 rounded-2xl px-4">
             <Download className="h-4 w-4" />
             Excel
           </Button>
         </a>
       </div>
+
+      {/* Две вкладки: продажи для хозяина, журнал склада — как раньше. */}
+      <div className="grid grid-cols-2 rounded-2xl border border-border bg-white p-1 text-sm font-semibold">
+        <button
+          type="button"
+          onClick={() => setTab("sales")}
+          className={tab === "sales" ? "rounded-xl bg-accent px-3 py-2.5 text-white" : "rounded-xl px-3 py-2.5 text-slate-500"}
+        >
+          Продажи
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("stock")}
+          className={tab === "stock" ? "rounded-xl bg-accent px-3 py-2.5 text-white" : "rounded-xl px-3 py-2.5 text-slate-500"}
+        >
+          Склад
+        </button>
+      </div>
+
+      {tab === "sales" ? (
+        <>
+          <div className="crm-chips">
+            {(
+              [
+                { value: "today", label: "Сегодня" },
+                { value: "week", label: "Неделя" },
+                { value: "month", label: "Месяц" },
+              ] as const
+            ).map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setSalesPeriod(option.value)}
+                className={
+                  salesPeriod === option.value
+                    ? "shrink-0 rounded-xl bg-accent px-4 py-2 text-[13px] font-semibold text-white"
+                    : "shrink-0 rounded-xl border border-border bg-white px-4 py-2 text-[13px] font-medium text-slate-600 hover:bg-slate-50"
+                }
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="crm-row">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="crm-row-title">{countWithWord(salesSummary.totalOrders, ["заказ", "заказа", "заказов"])}</p>
+              <p className="crm-row-amount">{formatCurrency(salesSummary.totalAmount)}</p>
+            </div>
+            <p className="crm-row-sub">
+              {salesPositions > 0 ? `${countWithWord(salesPositions, ["позиция", "позиции", "позиций"])} · ` : ""}
+              оплачено <b className="text-emerald-700">{formatCurrency(salesSummary.totalPaid)}</b> · долг{" "}
+              <b className="text-rose-600">{formatCurrency(salesSummary.totalDebt)}</b>
+            </p>
+          </div>
+
+          {salesLoading ? (
+            <Card><CardContent className="p-10 text-center text-sm text-muted">Загрузка продаж...</CardContent></Card>
+          ) : !salesOrders.length ? (
+            <Card><CardContent className="p-10 text-center text-sm text-muted">За период заказов нет</CardContent></Card>
+          ) : (
+            <div className="space-y-2.5">
+              {salesOrders.map((order, index) => {
+                const paymentMeta = orderPaymentStatusMeta(
+                  order.payment_status,
+                  Number(order.paid_amount),
+                  Number(order.total_amount)
+                );
+                return (
+                  <button
+                    key={order.id}
+                    type="button"
+                    onClick={() => router.push(`/orders/${order.id}`)}
+                    className="crm-row crm-row-link block w-full text-left"
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="crm-row-title truncate">{index + 1}) {order.client_name || order.address || formatOrderNumber(order.order_number)}</p>
+                      <p className="crm-row-amount">{formatCurrency(Number(order.total_amount))}</p>
+                    </div>
+                    <p className="crm-row-sub">
+                      {new Date(order.order_date).toLocaleDateString("ru-RU")}
+                      {(order as { order_items?: Array<unknown> }).order_items?.length
+                        ? ` · ${countWithWord((order as { order_items?: Array<unknown> }).order_items!.length, ["позиция", "позиции", "позиций"])}`
+                        : ""}{" "}
+                      · <span className={paymentMeta.className.includes("emerald") ? "text-emerald-700" : "text-rose-600"}>{paymentMeta.label}</span>
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
 
       <div className="relative">
         <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
@@ -402,6 +546,8 @@ export function MovementsPage() {
           </select>
         </div>
       </div>
+        </>
+      )}
     </section>
   );
 }

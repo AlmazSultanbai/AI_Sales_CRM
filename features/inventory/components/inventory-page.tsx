@@ -3,15 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { FileSpreadsheet, Filter, Grid2X2, History, PencilRuler, Plus, RefreshCw, Search, Truck } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCollections } from "@/features/catalog/hooks/use-catalog-queries";
 import { useStockItemByCode, useStockItems, useStockMutations } from "@/features/inventory/hooks/use-stock-queries";
 import { StockTable } from "@/features/inventory/components/stock-table";
 import { StockHistoryDialog } from "@/features/inventory/components/stock-history-dialog";
 import { StockMovementDrawer } from "@/features/inventory/components/stock-movement-drawer";
+import { ItemActionSheet } from "@/features/inventory/components/item-action-sheet";
 import { ExportDialog } from "@/features/exports/components/export-dialog";
 import { formatSom, formatStockQuantity } from "@/features/inventory/lib/stock-utils";
 import { Button } from "@/components/ui/button";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToaster } from "@/components/ui/toaster";
@@ -19,6 +21,7 @@ import { MovementType } from "@/types/domain";
 import { countWithWord } from "@/lib/format";
 
 export function InventoryPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
   const [materialFilter, setMaterialFilter] = useState("");
@@ -33,6 +36,8 @@ export function InventoryPage() {
   const [activeMovementType, setActiveMovementType] = useState<MovementType>("incoming");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [sheetItemId, setSheetItemId] = useState<string>();
   const [selectedItemId, setSelectedItemId] = useState<string>();
 
   const { data: collections = [] } = useCollections("", "all");
@@ -92,7 +97,7 @@ export function InventoryPage() {
   const summary = data?.summary ?? { totalItems: 0, totalQuantity: 0, totalAmount: 0, lowStockItems: 0 };
   const pagination = data?.pagination ?? { page: 1, pageSize, total: 0, totalPages: 1 };
 
-  const selectedItem = items.find((item) => item.id === selectedItemId);
+  const selectedItem = [...items, ...(scannedItem ? [scannedItem] : [])].find((item) => item.id === selectedItemId);
   const selectedCollection = collections.find((collection) => collection.id === collectionId);
   const selectedModels = selectedCollection?.collection_models ?? [];
 
@@ -107,96 +112,84 @@ export function InventoryPage() {
           </p>
         </div>
 
-        <Button
-          className="shrink-0 gap-1.5 rounded-2xl px-4"
-          onClick={() => {
-            setActiveMovementType("incoming");
-            setDrawerOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          Приход
-        </Button>
-      </div>
-
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-        <input
-          className="crm-search"
-          placeholder="Поиск: материал, модель, цвет..."
-          value={search}
-          onChange={(event) => {
-            setSearch(event.target.value);
-            setPage(1);
-          }}
-        />
-      </div>
-
-      <div className="crm-chips">
-        <Link href="/catalog" className="shrink-0">
-          <Button size="sm" variant="secondary" className="gap-1.5 rounded-xl">
-            <Grid2X2 className="h-3.5 w-3.5" />
-            Каталог
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            className="gap-1.5 rounded-2xl px-4"
+            onClick={() => {
+              setActiveMovementType("incoming");
+              setDrawerOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            Приход
           </Button>
-        </Link>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="shrink-0 gap-1.5 rounded-xl"
-          onClick={() => {
-            setActiveMovementType("outgoing");
-            setDrawerOpen(true);
-          }}
-        >
-          <Truck className="h-3.5 w-3.5" />
-          Расход
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="shrink-0 gap-1.5 rounded-xl"
-          onClick={() => {
-            setActiveMovementType("transfer");
-            setDrawerOpen(true);
-          }}
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-          Перемещение
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="shrink-0 gap-1.5 rounded-xl"
-          onClick={() => {
-            setActiveMovementType("adjustment");
-            setDrawerOpen(true);
-          }}
-        >
-          <PencilRuler className="h-3.5 w-3.5" />
-          Корректировка
-        </Button>
-        <Button size="sm" variant="outline" className="shrink-0 gap-1.5 rounded-xl" onClick={() => setHistoryOpen(true)}>
-          <History className="h-3.5 w-3.5" />
-          История
-        </Button>
 
-        <ExportDialog
-          defaultSection="stocks"
-          trigger={
-            <Button size="sm" variant="outline" className="shrink-0 gap-1.5 rounded-xl">
-              <FileSpreadsheet className="h-3.5 w-3.5" />
-              Выгрузка
-            </Button>
-          }
-        />
+          {/* Все прежние действия панели живут здесь — ничего не удалено. */}
+          <ActionMenu
+            size="md"
+            ariaLabel="Действия склада"
+            items={[
+              { label: "Каталог", icon: <Grid2X2 className="h-4 w-4" />, onSelect: () => router.push("/catalog") },
+              {
+                label: "Расход",
+                icon: <Truck className="h-4 w-4" />,
+                onSelect: () => {
+                  setSelectedItemId(undefined);
+                  setActiveMovementType("outgoing");
+                  setDrawerOpen(true);
+                },
+              },
+              {
+                label: "Перемещение",
+                icon: <RefreshCw className="h-4 w-4" />,
+                onSelect: () => {
+                  setSelectedItemId(undefined);
+                  setActiveMovementType("transfer");
+                  setDrawerOpen(true);
+                },
+              },
+              {
+                label: "Корректировка",
+                icon: <PencilRuler className="h-4 w-4" />,
+                onSelect: () => {
+                  setSelectedItemId(undefined);
+                  setActiveMovementType("adjustment");
+                  setDrawerOpen(true);
+                },
+              },
+              {
+                label: "История движений",
+                icon: <History className="h-4 w-4" />,
+                onSelect: () => {
+                  setSelectedItemId(undefined);
+                  setHistoryOpen(true);
+                },
+              },
+              { label: "Выгрузка в Excel", icon: <FileSpreadsheet className="h-4 w-4" />, onSelect: () => setExportOpen(true) },
+            ]}
+          />
+        </div>
+      </div>
 
+      <div className="flex items-center gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+          <input
+            className="crm-search"
+            placeholder="Поиск: материал, модель, цвет..."
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+          />
+        </div>
         <Button
-          size="sm"
           variant="outline"
-          className="shrink-0 gap-1.5 rounded-xl"
+          className="h-12 shrink-0 gap-1.5 rounded-2xl px-4"
           onClick={() => setShowFilters((value) => !value)}
         >
-          <Filter className="h-3.5 w-3.5" />
+          <Filter className="h-4 w-4" />
           Фильтр
         </Button>
       </div>
@@ -316,18 +309,7 @@ export function InventoryPage() {
           {scannedLoading ? (
             <p className="px-1 pb-1 text-sm text-muted">Загрузка позиции...</p>
           ) : scannedItem ? (
-            <StockTable
-              items={[scannedItem]}
-              onOpenHistory={(item) => {
-                setSelectedItemId(item.id);
-                setHistoryOpen(true);
-              }}
-              onOpenDetails={(item) => {
-                setSelectedItemId(item.id);
-                setActiveMovementType("incoming");
-                setDrawerOpen(true);
-              }}
-            />
+            <StockTable items={[scannedItem]} onOpenItem={(item) => setSheetItemId(item.id)} />
           ) : (
             <p className="px-1 pb-1 text-sm text-muted">Позиция по коду не найдена.</p>
           )}
@@ -337,13 +319,21 @@ export function InventoryPage() {
       <StockTable
         items={items}
         isLoading={isLoading}
-        onOpenHistory={(item) => {
+        onOpenItem={(item) => setSheetItemId(item.id)}
+      />
+
+      {/* Шторка позиции: все движения и история — по тапу на карточку. */}
+      <ItemActionSheet
+        item={[...items, ...(scannedItem ? [scannedItem] : [])].find((row) => row.id === sheetItemId)}
+        onClose={() => setSheetItemId(undefined)}
+        onAction={(item, action) => {
+          setSheetItemId(undefined);
           setSelectedItemId(item.id);
-          setHistoryOpen(true);
-        }}
-        onOpenDetails={(item) => {
-          setSelectedItemId(item.id);
-          setActiveMovementType("incoming");
+          if (action === "history") {
+            setHistoryOpen(true);
+            return;
+          }
+          setActiveMovementType(action);
           setDrawerOpen(true);
         }}
       />
@@ -418,6 +408,8 @@ export function InventoryPage() {
         onOpenChange={(open) => setHistoryOpen(open)}
         item={selectedItem}
       />
+
+      <ExportDialog defaultSection="stocks" open={exportOpen} onOpenChange={setExportOpen} />
     </section>
   );
 }

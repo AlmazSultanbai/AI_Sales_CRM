@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Download, FilePenLine, Filter, Plus, RefreshCw, Search, Trash2, XCircle } from "lucide-react";
+import { Copy, Download, Filter, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useOrders, useOrderMutations } from "@/features/orders/hooks/use-orders-queries";
-import { formatCurrency, orderPaymentStatusMeta, orderStatusMeta } from "@/features/orders/lib/view-utils";
+import { useStores } from "@/features/stores/hooks/use-stores-queries";
+import { formatCurrency, formatOrderNumber, orderPaymentStatusMeta, orderStatusMeta } from "@/features/orders/lib/view-utils";
 import { useToaster } from "@/components/ui/toaster";
 import { cn } from "@/lib/utils";
 import { countWithWord } from "@/lib/format";
@@ -17,6 +20,7 @@ function todayISO() {
 }
 
 export function OrdersPage() {
+  const router = useRouter();
   const { toast } = useToaster();
   const [status, setStatus] = useState<"all" | "draft" | "confirmed" | "completed" | "cancelled">("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -51,6 +55,16 @@ export function OrdersPage() {
 
   const { data, isLoading, error } = useOrders(filters);
   const { statusOrderMutation, duplicateOrderMutation, deleteOrderMutation } = useOrderMutations();
+  // Долг клиента целиком: считается на сервере по заказам, тянем список клиентов один раз.
+  const { data: storesForDebt = [] } = useStores("", "all", "name");
+  const clientDebtByName = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const store of storesForDebt) {
+      const key = String(store.name ?? "").trim().toLowerCase();
+      if (key) map.set(key, Number(store.current_debt_sum ?? store.debt_balance ?? 0));
+    }
+    return map;
+  }, [storesForDebt]);
   const summary = data?.summary ?? {
     totalOrders: 0,
     totalAmount: 0,
@@ -64,6 +78,34 @@ export function OrdersPage() {
   };
   const pagination = data?.pagination ?? { page: 1, pageSize, total: 0, totalPages: 1 };
   const orders = data?.items ?? [];
+
+  // Группировка страницы по дням: чип дня = разделитель + мини-итог.
+  const groupedOrders = useMemo(() => {
+    const sorted = [...orders].sort((a, b) => {
+      const byDate = String(b.order_date).localeCompare(String(a.order_date));
+      if (byDate !== 0) return byDate;
+      return String(b.updated_at).localeCompare(String(a.updated_at));
+    });
+
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
+    const groups: Array<{ key: string; label: string; total: number; positions: number; orders: typeof orders }> = [];
+    for (const order of sorted) {
+      const key = String(order.order_date);
+      let group = groups[groups.length - 1];
+      if (!group || group.key !== key) {
+        const label =
+          key === today ? "Сегодня" : key === yesterday ? "Вчера" : new Date(key).toLocaleDateString("ru-RU");
+        group = { key, label, total: 0, positions: 0, orders: [] };
+        groups.push(group);
+      }
+      group.orders.push(order);
+      group.total += Number(order.total_amount ?? 0);
+      group.positions += (order as { order_items?: Array<unknown> }).order_items?.length ?? 0;
+    }
+    return groups;
+  }, [orders]);
 
   async function handleStatus(orderId: string, nextStatus: "draft" | "confirmed" | "completed" | "cancelled") {
     try {
@@ -334,90 +376,130 @@ export function OrdersPage() {
         </Card>
       ) : (
         <div className="space-y-2.5">
-          {orders.map((order, index) => {
-            const statusMeta = orderStatusMeta(order.status);
-            const paymentMeta = orderPaymentStatusMeta(
-              order.payment_status,
-              Number(order.paid_amount),
-              Number(order.total_amount)
-            );
-            const displayIndex = String((pagination.page - 1) * pagination.pageSize + index + 1).padStart(2, "0");
-            // Долг считаем от суммы и оплат: в части старых заказов debt_amount в базе не пересчитан
-            // и хранит 0 при нулевой оплате — брать его напрямую нельзя.
-            const debt = Math.max(Number(order.total_amount) - Number(order.paid_amount), 0);
-
-            return (
-              <div key={order.id} className="crm-row crm-row-link">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="crm-row-title truncate">{order.client_name || order.address || `Заказ №${displayIndex}`}</p>
-                    <p className="crm-row-sub truncate">
-                      {`Заказ №${displayIndex} · ${new Date(order.order_date).toLocaleDateString("ru-RU")}`}
-                      {order.phone ? ` · ${order.phone}` : ""}
-                    </p>
-                  </div>
-
-                  <div className="text-right">
-                    <p className="crm-row-amount">{formatCurrency(Number(order.total_amount))}</p>
-                    <p className="crm-row-amount-sub">
-                      {debt > 0 ? `долг ${formatCurrency(debt)}` : "оплачен полностью"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  <span className={cn("inline-flex rounded-lg border px-2.5 py-1 text-[12px] font-semibold leading-none", statusMeta.className)}>
-                    {statusMeta.label}
-                  </span>
-                  <span className={cn("inline-flex rounded-lg border px-2.5 py-1 text-[12px] font-semibold leading-none", paymentMeta.className)}>
-                    {paymentMeta.label}
-                  </span>
-                  {order.address ? <span className="crm-pill crm-pill-soft truncate">{order.address}</span> : null}
-                </div>
-
-                {order.materials_preview ? (
-                  <p className="mt-2 line-clamp-2 text-[13px] text-muted">{order.materials_preview}</p>
-                ) : null}
-
-                <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2.5 text-[13px]">
-                  <p className="text-muted">
-                    Оплачено <b className="text-emerald-700">{formatCurrency(Number(order.paid_amount))}</b>
-                    {" · "}
-                    Установка <b className="text-ink">{formatCurrency(Number(order.installation_amount))}</b>
-                    {" · "}
-                    Прибыль <b className="text-emerald-700">{formatCurrency(Number(order.gross_profit))}</b>
-                  </p>
-
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <Link href={`/orders/${order.id}`}>
-                      <Button size="sm" variant="outline" className="gap-1">
-                        <FilePenLine className="h-3.5 w-3.5" />
-                        Открыть
-                      </Button>
-                    </Link>
-                    {order.status !== "cancelled" ? (
-                      <Button size="sm" variant="outline" className="gap-1 text-rose-600" onClick={() => handleStatus(order.id, "cancelled")}>
-                        <XCircle className="h-3.5 w-3.5" />
-                        Отменить
-                      </Button>
-                    ) : null}
-                    <Button size="sm" variant="outline" onClick={() => handleDuplicate(order.id)}>
-                      Дубль
-                    </Button>
-                    <a href={`/api/exports/excel?section=orders&order_id=${order.id}`}>
-                      <Button size="sm" variant="outline" className="gap-1">
-                        <Download className="h-3.5 w-3.5" />
-                        Excel
-                      </Button>
-                    </a>
-                    <Button size="sm" variant="ghost" className="text-rose-600" onClick={() => handleDelete(order.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
+          {groupedOrders.map((group) => (
+            <div key={group.key} className="space-y-2.5">
+              {/* Чип дня — разделитель и мини-отчёт сразу: как в KerbenPro. */}
+              <div className="flex flex-wrap items-baseline gap-x-2 rounded-xl bg-accent/10 px-3.5 py-2 text-[13px] font-medium text-slate-600">
+                <span className="font-semibold text-ink">{group.label}</span>
+                <span>
+                  · {countWithWord(group.orders.length, ["заказ", "заказа", "заказов"])} на{" "}
+                  <b className="text-accent">{formatCurrency(group.total)}</b>
+                  {group.positions > 0 ? ` · ${countWithWord(group.positions, ["позиция", "позиции", "позиций"])}` : ""}
+                </span>
               </div>
-            );
-          })}
+
+              {group.orders.map((order) => {
+                const paymentMeta = orderPaymentStatusMeta(
+                  order.payment_status,
+                  Number(order.paid_amount),
+                  Number(order.total_amount)
+                );
+                // Долг считаем от суммы и оплат: в части старых заказов debt_amount в базе не пересчитан
+                // и хранит 0 при нулевой оплате — брать его напрямую нельзя.
+                const debt = Math.max(Number(order.total_amount) - Number(order.paid_amount), 0);
+                const total = Number(order.total_amount);
+                const paidShare = total > 0 ? Math.min(100, Math.round((Number(order.paid_amount) / total) * 100)) : 0;
+                const clientDebt = clientDebtByName.get(String(order.client_name ?? "").trim().toLowerCase());
+
+                return (
+                  <div
+                    key={order.id}
+                    role="link"
+                    tabIndex={0}
+                    onClick={() => router.push(`/orders/${order.id}`)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") router.push(`/orders/${order.id}`);
+                    }}
+                    className="crm-row crm-row-link cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="crm-row-title truncate">{order.client_name || order.address || formatOrderNumber(order.order_number)}</p>
+                        <p className="crm-row-sub truncate">
+                          {`${formatOrderNumber(order.order_number)} · ${new Date(order.order_date).toLocaleDateString("ru-RU")}`}
+                          {order.phone ? ` · ${order.phone}` : ""}
+                        </p>
+                      </div>
+
+                      <div className="text-right">
+                        <p className="crm-row-amount">{formatCurrency(total)}</p>
+                        <p className="crm-row-amount-sub">
+                          {debt > 0 ? `долг ${formatCurrency(debt)}` : "оплачен полностью"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {/* Статус — дропдауном: «Отменить» живёт внутри него. */}
+                        <select
+                          aria-label="Статус заказа"
+                          value={order.status}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => {
+                            event.stopPropagation();
+                            const next = event.target.value as typeof order.status;
+                            if (next === "cancelled" && !window.confirm("Отменить заказ? Остатки будут возвращены на склад.")) {
+                              event.target.value = order.status;
+                              return;
+                            }
+                            void handleStatus(order.id, next);
+                          }}
+                          className={cn(
+                            "appearance-none rounded-lg border px-2.5 py-1 pr-6 text-[12px] font-semibold leading-none outline-none",
+                            "bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%226%22%3E%3Cpath d=%22M1 1l4 4 4-4%22 stroke=%22currentColor%22 stroke-width=%221.5%22 fill=%22none%22/%3E%3C/svg%3E')] bg-[position:right_8px_center] bg-no-repeat",
+                            orderStatusMeta(order.status).className
+                          )}
+                        >
+                          <option value="draft">Черновик</option>
+                          <option value="confirmed">Подтвержден</option>
+                          <option value="completed">Выполнен</option>
+                          <option value="cancelled">Отменен</option>
+                        </select>
+                        <span className={cn("inline-flex rounded-lg border px-2.5 py-1 text-[12px] font-semibold leading-none", paymentMeta.className)}>
+                          {paymentMeta.label}
+                        </span>
+                      </div>
+
+                      <ActionMenu
+                        ariaLabel="Действия с заказом"
+                        items={[
+                          { label: "Дубль заказа", icon: <Copy className="h-4 w-4" />, onSelect: () => void handleDuplicate(order.id) },
+                          {
+                            label: "Excel по заказу",
+                            icon: <Download className="h-4 w-4" />,
+                            onSelect: () => window.open(`/api/exports/excel?section=orders&order_id=${order.id}`, "_blank"),
+                          },
+                          { label: "Удалить заказ", icon: <Trash2 className="h-4 w-4" />, danger: true, onSelect: () => void handleDelete(order.id) },
+                        ]}
+                      />
+                    </div>
+
+                    {order.materials_preview ? (
+                      <p className="mt-2 line-clamp-2 text-[13px] text-muted">{order.materials_preview}</p>
+                    ) : null}
+
+                    <div className="mt-2.5 border-t border-border pt-2.5 text-[13px]">
+                      <div className="flex items-baseline justify-between gap-2 text-muted">
+                        <span>
+                          Оплачено {paidShare}% · <b className="text-emerald-700">{formatCurrency(Number(order.paid_amount))}</b>
+                        </span>
+                        {debt > 0 ? <b className="text-rose-600">Долг {formatCurrency(debt)}</b> : null}
+                      </div>
+                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-200/70">
+                        <i className="block h-full rounded-full bg-emerald-600" style={{ width: `${paidShare}%` }} />
+                      </div>
+                      {clientDebt != null && clientDebt > 0.009 ? (
+                        <p className="mt-1.5 text-[12px] text-muted">
+                          Весь долг клиента: <b className="text-rose-600">{formatCurrency(clientDebt)}</b>
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
       )}
 

@@ -98,6 +98,26 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
   const [manualTotalEnabled, setManualTotalEnabled] = useState(false);
   const [workshopTotal, setWorkshopTotal] = useState<number | "">("");
   const [blocks, setBlocks] = useState<AddressBlock[]>([makeAddress(0)]);
+  // Окна-калькулятор: Ш×В на строку ткани; живёт только в форме, в заказ уходит готовое количество в м².
+  const [windowSizes, setWindowSizes] = useState<Record<string, { w: string; h: string }>>({});
+
+  function windowKey(blockIndex: number, itemIndex: number) {
+    return `${blockIndex}:${itemIndex}`;
+  }
+
+  function applyWindowSize(blockIndex: number, itemIndex: number, next: { w?: string; h?: string }) {
+    const key = windowKey(blockIndex, itemIndex);
+    setWindowSizes((prev) => {
+      const current = { w: prev[key]?.w ?? "", h: prev[key]?.h ?? "", ...next };
+      const width = Number(current.w);
+      const height = Number(current.h);
+      if (width > 0 && height > 0) {
+        const area = Math.max(Math.round(((width * height) / 10000) * 100) / 100, 0.5);
+        patchMaterial(blockIndex, itemIndex, { quantity_m2: area });
+      }
+      return { ...prev, [key]: current };
+    });
+  }
   const [prefilledFromStore, setPrefilledFromStore] = useState(false);
   const [selectedHistoryOrderId, setSelectedHistoryOrderId] = useState<string | null>(null);
   const [exportDateFrom, setExportDateFrom] = useState("");
@@ -696,22 +716,72 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                           ))}
                         </select>
 
-                        {/* Количество и единица — одним полем, чтобы край строки совпадал с остальными. */}
-                        <div className="relative min-w-0">
-                          <Input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            className="pr-14"
-                            placeholder="Количество"
-                            value={item.quantity_m2 === 0 ? "" : item.quantity_m2}
-                            disabled={!canEdit}
-                            onChange={(e) => patchMaterial(blockIndex, itemIndex, { quantity_m2: toNumber(e.target.value) })}
-                          />
-                          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">
-                            {unitLabel(item.unit || selectedStock?.unit || "m2")}
-                          </span>
-                        </div>
+                        {/* Ткани меряются окнами: Ш×В в см считают м² сами; ручной ввод м² остаётся. */}
+                        {(item.unit || selectedStock?.unit || "m2") === "m2" ? (
+                          <div className="grid min-w-0 grid-cols-[1fr_1fr_1.15fr] gap-1.5">
+                            <div className="relative min-w-0">
+                              <Input
+                                type="number"
+                                min={0}
+                                inputMode="numeric"
+                                className="pr-7"
+                                placeholder="Шир"
+                                aria-label="Ширина, см"
+                                value={windowSizes[windowKey(blockIndex, itemIndex)]?.w ?? ""}
+                                disabled={!canEdit}
+                                onChange={(e) => applyWindowSize(blockIndex, itemIndex, { w: e.target.value })}
+                              />
+                              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted">см</span>
+                            </div>
+                            <div className="relative min-w-0">
+                              <Input
+                                type="number"
+                                min={0}
+                                inputMode="numeric"
+                                className="pr-7"
+                                placeholder="Выс"
+                                aria-label="Высота, см"
+                                value={windowSizes[windowKey(blockIndex, itemIndex)]?.h ?? ""}
+                                disabled={!canEdit}
+                                onChange={(e) => applyWindowSize(blockIndex, itemIndex, { h: e.target.value })}
+                              />
+                              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted">см</span>
+                            </div>
+                            <div className="relative min-w-0">
+                              <Input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                className="pr-8"
+                                placeholder="м²"
+                                aria-label="Количество, м²"
+                                value={item.quantity_m2 === 0 ? "" : item.quantity_m2}
+                                disabled={!canEdit}
+                                onChange={(e) => {
+                                  setWindowSizes((prev) => ({ ...prev, [windowKey(blockIndex, itemIndex)]: { w: "", h: "" } }));
+                                  patchMaterial(blockIndex, itemIndex, { quantity_m2: toNumber(e.target.value) });
+                                }}
+                              />
+                              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted">м²</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="relative min-w-0">
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              className="pr-14"
+                              placeholder="Количество"
+                              value={item.quantity_m2 === 0 ? "" : item.quantity_m2}
+                              disabled={!canEdit}
+                              onChange={(e) => patchMaterial(blockIndex, itemIndex, { quantity_m2: toNumber(e.target.value) })}
+                            />
+                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">
+                              {unitLabel(item.unit || selectedStock?.unit || "m2")}
+                            </span>
+                          </div>
+                        )}
 
                         <Button
                           variant="outline"
@@ -722,6 +792,18 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                           <Trash2 className="h-4 w-4" />
                           <span className="md:hidden">Удалить строку</span>
                         </Button>
+
+                        {item.quantity_m2 > 0 && item.sale_price_per_m2 > 0 ? (
+                          <p className="col-span-full -mt-1 text-[12px] text-muted">
+                            {(() => {
+                              const size = windowSizes[windowKey(blockIndex, itemIndex)];
+                              const dims = size && Number(size.w) > 0 && Number(size.h) > 0 ? `${size.w}×${size.h} см = ` : "";
+                              const qty = item.quantity_m2.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+                              return `${dims}${qty} ${unitLabel(item.unit || "m2")} × ${formatCurrency(item.sale_price_per_m2)} = `;
+                            })()}
+                            <b className="text-ink">{formatCurrency(item.quantity_m2 * item.sale_price_per_m2)}</b>
+                          </p>
+                        ) : null}
                       </div>
                     );
                   })}
@@ -824,7 +906,9 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                 </div>
 
                 {blockIndex === 0 ? (
-                  <div className="flex flex-wrap items-center gap-3 border-t border-border pt-2">
+                  <details className="border-t border-border pt-2">
+                    <summary className="cursor-pointer select-none text-sm font-medium text-muted">Дополнительно: общая сумма вручную</summary>
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
                     <label className="inline-flex items-center gap-2 text-sm text-ink">
                       <input
                         type="checkbox"
@@ -855,7 +939,8 @@ export function OrderDetailsPage({ orderId }: { orderId: string }) {
                     <span className="text-sm text-muted">
                       Общая сумма: <b className="text-ink">{formatCurrency(manualTotalEnabled ? toNumber(totalAmount) : orderNetTotal)}</b>
                     </span>
-                  </div>
+                    </div>
+                  </details>
                 ) : null}
               </CardContent>
             </Card>

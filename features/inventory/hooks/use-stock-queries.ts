@@ -47,9 +47,10 @@ export function useStockMovements(filters: {
   color?: string;
   page?: number;
   page_size?: number;
-}) {
+}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["stock-movements", filters],
+    enabled: options?.enabled ?? true,
     queryFn: () => fetchStockMovements(filters),
     placeholderData: keepPreviousData,
     staleTime: 20_000,

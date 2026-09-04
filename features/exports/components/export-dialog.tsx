@@ -17,17 +17,24 @@ export function ExportDialog({
   defaultSection = "stocks",
   title = "Выгрузка в Excel",
   description = "Выберите раздел и период — файл .xlsx скачается на устройство.",
+  open,
+  onOpenChange,
 }: {
-  trigger: ReactNode;
+  trigger?: ReactNode;
   defaultSection?: ExportSection;
   title?: string;
   description?: string;
+  /** Управляемый режим: открытие из меню без собственной кнопки-триггера. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [innerOpen, setInnerOpen] = useState(false);
+  const isOpen = open ?? innerOpen;
+  const setOpen = onOpenChange ?? setInnerOpen;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={setOpen}>
+      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>

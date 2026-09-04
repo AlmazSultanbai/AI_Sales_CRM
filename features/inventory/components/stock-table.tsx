@@ -1,13 +1,15 @@
 "use client";
 
-import { History, Pencil } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { ProductThumb } from "@/features/media/components/product-thumb";
 import { movementTypeLabel, formatSom, formatStockQuantity } from "@/features/inventory/lib/stock-utils";
 import { StockListItem } from "@/features/inventory/lib/stock-api";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { unitLabel } from "@/lib/units";
 import { cn } from "@/lib/utils";
+
+/** Среднее окно ~2,1 м²: переводим остаток ткани в понятную бизнес-единицу. */
+const WINDOW_M2 = 2.1;
 
 function stockPillClass(quantity: number, threshold: number) {
   if (quantity <= 0) return "crm-pill crm-pill-red";
@@ -28,13 +30,11 @@ function lastMovementText(item: StockListItem) {
 export function StockTable({
   items,
   isLoading,
-  onOpenHistory,
-  onOpenDetails,
+  onOpenItem,
 }: {
   items: StockListItem[];
   isLoading?: boolean;
-  onOpenHistory: (item: StockListItem) => void;
-  onOpenDetails: (item: StockListItem) => void;
+  onOpenItem: (item: StockListItem) => void;
 }) {
   if (isLoading) {
     return (
@@ -64,11 +64,17 @@ export function StockTable({
         const collection = item.collections?.name ?? null;
         const salePrice = item.sale_price_per_m2 == null ? null : Number(item.sale_price_per_m2);
         const purchasePrice = item.purchase_price_per_m2 == null ? null : Number(item.purchase_price_per_m2);
+        const windows = item.unit === "m2" && quantity > 0 ? Math.max(1, Math.round(quantity / WINDOW_M2)) : null;
 
         const subtitle = [collection, model, color].filter(Boolean).join(" · ") || "Без характеристик";
 
         return (
-          <div key={item.id} className="crm-row crm-row-link">
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onOpenItem(item)}
+            className="crm-row crm-row-link block w-full text-left"
+          >
             <div className="flex items-start gap-3">
               <ProductThumb
                 src={item.photo_url ?? item.collection_models?.image_url ?? null}
@@ -83,11 +89,14 @@ export function StockTable({
                     <p className="crm-row-sub truncate">{subtitle}</p>
                   </div>
 
-                  <div className="text-right">
-                    <p className="crm-row-amount">{salePrice == null ? "0 с" : formatSom(salePrice)}</p>
-                    {purchasePrice == null ? null : (
-                      <p className="crm-row-amount-sub">закуп {formatSom(purchasePrice)}</p>
-                    )}
+                  <div className="flex items-start gap-2 text-right">
+                    <div>
+                      <p className="crm-row-amount">{salePrice == null ? "0 с" : formatSom(salePrice)}</p>
+                      {purchasePrice == null ? null : (
+                        <p className="crm-row-amount-sub">закуп {formatSom(purchasePrice)}</p>
+                      )}
+                    </div>
+                    <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-300" />
                   </div>
                 </div>
 
@@ -95,22 +104,12 @@ export function StockTable({
                   <span className={cn(stockPillClass(quantity, threshold))}>
                     {quantity <= 0 ? "Нет остатка" : `${formatStockQuantity(quantity)} ${unit}`}
                   </span>
+                  {windows != null ? <span className="crm-pill crm-pill-soft">≈ {windows} окон</span> : null}
                   <span className="crm-pill crm-pill-soft">{lastMovementText(item)}</span>
                 </div>
               </div>
             </div>
-
-            <div className="mt-2.5 flex items-center justify-end gap-2 border-t border-border pt-2.5">
-              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onOpenHistory(item)}>
-                <History className="h-3.5 w-3.5" />
-                История
-              </Button>
-              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onOpenDetails(item)}>
-                <Pencil className="h-3.5 w-3.5" />
-                Движение
-              </Button>
-            </div>
-          </div>
+          </button>
         );
       })}
     </div>
